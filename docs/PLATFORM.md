@@ -32,9 +32,9 @@ cargo ccc submit 3     # validates, checks freshness, asks "yes", uploads each r
 - Credentials expire. On HTTP 401/403, copy fresh ones.
 - `platform = "manual"` still works: `submit` then just lists the files to upload in the browser.
 
-**Not yet verified live:** the cookie → game-token step (XSRF header), and whether `x-ccc-slug` is the
-contest slug (it was the only header value the sanitiser dropped). `cargo ccc progress` tests both
-without side effects. Run it once in a training game before Friday.
+**Not yet verified live:** the cookie → game-token step (XSRF header). `cargo ccc progress` tests it
+without side effects. Run it once in a training game before Friday. (Confirmed in DevTools:
+`x-ccc-slug` is the contest `slug`, the dashed form like `training-ccc-2025-11-…`.)
 
 ## The API
 
