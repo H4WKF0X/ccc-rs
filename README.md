@@ -22,13 +22,14 @@ new-contest.sh -> download level -> cargo ccc ingest -> /solve N -> cargo ccc al
 ## The per-level loop (inside a contest repo)
 
 ```bash
-cargo ccc ingest                 # newest level zip in ~/Downloads (or: ingest <zip|dir|files> [--level N])
+cargo ccc fetch 3                # download + ingest from codingcontest.org (platform = "codingcontest")
+cargo ccc ingest                 # or: newest level zip in ~/Downloads (or: ingest <zip|dir|files> [--level N])
 claude                           # then: /solve 3   (reads statement + example, writes level3.rs, validates)
 cargo ccc all 3                  # GO only if level 3 matches the example; then writes work/level3/out/
-cargo ccc submit 3               # re-validates, checks outputs are fresh, lists files to upload
+cargo ccc submit 3               # re-validates, checks freshness, uploads (or lists files in manual mode)
 ```
 
-Other commands: `validate N`, `run N <in> [out]`, `bench N`, `new-level N [--from M]`, `status`.
+Other commands: `validate N`, `run N <in> [out]`, `bench N`, `new-level N [--from M]`, `status`, `progress`.
 `cargo ccc` is a cargo alias (`.cargo/config.toml`), so it works the same on Linux, macOS and Windows.
 
 ## Layout
@@ -41,7 +42,8 @@ Other commands: `validate N`, `run N <in> [out]`, `bench N`, `new-level N [--fro
 | `templates/level.rs` | Stub for `cargo ccc new-level N`. |
 | `ccc.toml` / `ccc.local.toml` | Contest settings / personal overrides (git-ignored). |
 | `CLAUDE.md`, `.claude/skills/` | Project memory and `/solve`, `/review` for Claude Code. |
-| `docs/PLATFORM.md` | What we know about codingcontest.org, the HAR capture guide, porting notes. |
+| `docs/PLATFORM.md` | The codingcontest.org API, credentials setup, HAR capture guide. |
+| `tools/sanitize_har.py` | Strip secrets from a browser HAR before sharing it. |
 | `work/` | Runtime only (git-ignored): ingested inputs, produced outputs, statements. |
 
 ## Setup

@@ -6,9 +6,13 @@ name = "template"
 # The game on codingcontest.org (from https://codingcontest.org/api/games), when known.
 game_slug = ""
 
-# How `cargo ccc submit` delivers outputs: "manual" (you upload in the browser) or "codingcontest"
-# (direct upload, not written yet; see docs/PLATFORM.md).
+# "manual": you download/upload in the browser and `submit` lists the files.
+# "codingcontest": `fetch`, `progress` and `submit` talk to codingcontest.org (see docs/PLATFORM.md).
 platform = "manual"
+
+# The <name> in the portal URL codingcontest.org/contests/<name>/game. Optional with platform =
+# "codingcontest": if unset, your one RUNNING registration is used.
+contest = ""
 
 # Output line endings: "auto" copies the example .out; "crlf" or "lf" force one.
 line_ending = "auto"

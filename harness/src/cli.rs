@@ -16,12 +16,14 @@ const HELP: &str = "\
 cargo ccc — Cloudflight Coding Contest pipeline
 
   ingest [paths..] [--level N]   unpack a download (zip/dir/files; default: newest zip in Downloads)
+  fetch N                        download level N from codingcontest.org and ingest it
   validate N                     run level N on the example(s), compare to the expected output
   all N                          validate, then (only on GO) write every real output to work/levelN/out
   run N <in> [out]               run level N on one file (prints to stdout without [out])
   bench N                        time level N on every input
   new-level N [--from M]         create solution/src/levels/levelN.rs (from the stub, or a copy of level M)
   status                         what's ingested, solved and produced
+  progress                       your progress on codingcontest.org (also checks the credentials)
   submit N [--yes]               re-validate, check outputs are fresh, then hand them to the platform
 
 Set CCC_DEBUG=1 to see harness::trace! output on stderr.";
@@ -53,6 +55,8 @@ fn dispatch(levels: &[Level], args: &[String]) -> Result<bool, String> {
     let rest = &args[1..];
     match cmd.as_str() {
         "ingest" => ingest::run(&ctx.ws, &ctx.cfg, rest),
+        "fetch" => platform::fetch(&ctx.ws, &ctx.cfg, level_arg(rest)?),
+        "progress" => platform::progress(&ctx.cfg),
         "validate" => ctx.validate(level_arg(rest)?),
         "all" => ctx.all(level_arg(rest)?),
         "run" => ctx.run(rest),

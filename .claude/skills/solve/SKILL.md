@@ -7,7 +7,8 @@ Solve level **$ARGUMENTS** of this contest.
 
 1. Read the problem statement in `work/level$ARGUMENTS/statement/` (PDF, HTML, or whatever was
    downloaded). If an earlier level's statement exists, skim what changed.
-2. Read the worked example: `work/level$ARGUMENTS/in/*example*.in` and its matching `.out`. Work out
+2. Read the worked example in `work/level$ARGUMENTS/in/`: `in_level-$ARGUMENTS_0-example.txt` and
+   `out_level-$ARGUMENTS_0-example.txt` (old CatCoder naming: `*example*.in` + `.out`). Work out
    by hand the exact rule that turns the input into that output, including the precise output
    format (numbers per line, spacing, separators, blank lines).
 3. Look at the sizes in `work/level$ARGUMENTS/in/`. The largest real input tells you whether

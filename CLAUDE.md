@@ -13,10 +13,11 @@ byte for byte. A human runs validation and submission. You never upload anything
 
 ## The loop (who does what)
 
-1. Human downloads the level in the browser and runs `cargo ccc ingest`. That fills `work/level<N>/`:
-   - `in/*example*.in` + matching `.out`: the worked example (known answer)
-   - `in/*.in` (the rest): the real inputs (answers unknown)
-   - `statement/`: everything else (PDF, HTML, images): read this first
+1. Human runs `cargo ccc fetch <N>` (or downloads in the browser + `cargo ccc ingest`). That fills `work/level<N>/`:
+   - `in/in_level-<N>_0-example.txt` + `in/out_level-<N>_0-example.txt`: the worked example (known answer)
+   - `in/in_level-<N>_1-small.txt`, `in/in_level-<N>_2-large.txt`: the real inputs (answers unknown)
+   - `statement/level-<N>.pdf`: the problem description. Read this first.
+   (Old CatCoder naming `level<N>_0_example.in/.out` also works.)
 2. **You** read the statement and the example pair, then write or extend `level<N>.rs`.
 3. You may run `cargo ccc validate <N>` yourself and iterate until it says GO.
 4. Human runs `cargo ccc all <N>` (validate, then write the real outputs), reviews, then
@@ -62,9 +63,9 @@ level N-1's code (`--from`) is often right.
 
 ## Commands
 
-`cargo ccc ingest [zip|dir|files] [--level N]` · `cargo ccc validate N` · `cargo ccc all N` ·
+`cargo ccc fetch N` · `cargo ccc ingest [zip|dir|files] [--level N]` · `cargo ccc validate N` · `cargo ccc all N` ·
 `cargo ccc run N <in> [out]` · `cargo ccc bench N` · `cargo ccc new-level N [--from M]` ·
-`cargo ccc status` · `cargo ccc submit N` (human only).
+`cargo ccc status` · `cargo ccc progress` · `cargo ccc submit N` (human only).
 
-The platform is codingcontest.org (CatCoder is gone). Submission is currently manual; see
-`docs/PLATFORM.md`.
+The platform is codingcontest.org (CatCoder is gone); see `docs/PLATFORM.md`. Output line endings
+are copied from the example (codingcontest.org uses LF).

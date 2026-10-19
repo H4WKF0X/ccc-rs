@@ -5,6 +5,7 @@
       "Bash(cargo ccc run:*)",
       "Bash(cargo ccc bench:*)",
       "Bash(cargo ccc status:*)",
+      "Bash(cargo ccc progress:*)",
       "Bash(cargo ccc new-level:*)",
       "Bash(cargo ccc help:*)",
       "Bash(cargo build:*)",

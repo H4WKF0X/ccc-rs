@@ -1,78 +1,88 @@
-# The contest platform: CatCoder → codingcontest.org
+# The contest platform: codingcontest.org
 
-From the 42nd CCC (2026-10-23) the contest runs on a new platform. CatCoder
-(`catcoder.codingcontest.org`) and its `/api/game/...` endpoints, which the old Java pipeline's
-`CatCoder.java` used, are no longer how games are played. The notes below come from the new portal's public
-JavaScript bundles and public API (checked 2026-10-05), not from a logged-in session.
+From the 42nd CCC (2026-10-23) contests run on **codingcontest.org**. CatCoder
+(`catcoder.codingcontest.org`), which the old Java pipeline's `CatCoder.java` talked to, is gone.
+The notes below come from the portal's public JavaScript and API, plus a HAR captured during a
+Spaceship training run (2026-10-19), sanitised with `tools/sanitize_har.py`.
 
-## What we know
+## Using it
 
-**Portal: `https://codingcontest.org`** (Angular SPA)
-- Auth: `POST /api/auth/login`, `GET /api/auth/current-user`. The session lives in a cookie.
-- `GET /api/editions/active` (public): this year's contests (`slug`, `startTime`, `durationMinutes`,
-  `maxTeamSize`). 2026: classic 13:00Z, 240 min, teams ≤3; school 08:00Z, 120 min; AI 13:00Z, 240 min.
-- `GET /api/games` (public): every game, with `slug`, `baseUrl`, `totalLevels`. Past games are
-  playable for training, e.g.:
+```toml
+# ccc.toml
+platform = "codingcontest"
+contest = "training-ccc-2025.11-classic-spaceship-23882-ff454653"   # optional, see below
 
-  | slug | baseUrl | levels |
-  |------|---------|--------|
-  | `ccc-2025.11-classic-spaceship` | `https://spaceship.codingcontest.org/` | 8 |
-  | `ccc-2024.10-classic-desks` | `https://desks.codingcontest.org/` | 7 |
-  | `ccc-2024.04-classic-lawn-mower` | `https://lawn-mower.codingcontest.org/` | 7 |
+# ccc.local.toml (git-ignored), option A: your portal cookies
+cookie = "…"          # DevTools → Network → any codingcontest.org/api request → Request Headers → Cookie
+```
 
-- Training: `POST /api/training/{gameSlug}/start?mode=challenge|exploration`. `challenge` is a timed run
-  with levels unlocking in order, like the real contest. `exploration` is untimed.
-  `GET /api/training/active` shows the current run.
+```bash
+cargo ccc progress     # checks the credentials and shows your levels/submissions
+cargo ccc fetch 3      # downloads level 3's zip and ingests it (instead of ingest from Downloads)
+cargo ccc submit 3     # validates, checks freshness, asks "yes", uploads each real output
+```
 
-**Games: one app per game, embedded in the portal**
-- The portal shows the game in a full-screen iframe ("Game Visualizer") loaded from the game's
-  `baseUrl`.
-- Auth handoff: the portal calls `POST /api/game-token {"contestSlug": "..."}` → `{"token": "..."}`.
-  It waits for the iframe to post `{type: "ccc:auth-ready"}`, then sends it
-  `{type: "ccc:auth-token", token, contestSlug, contestStartMs, serverClockOffsetMs, contestDurationMinutes, exitUrl}`.
-- Game apps return 403 `"This game can only be accessed through the CCC platform"` unless they are
-  loaded inside the portal's iframe. We can't read their JS from outside.
-- The game's CSP allows `connect-src https://files.codingcontest.org`, so inputs and statements are
-  probably downloaded from there.
-- Scores reach the portal through SSE at `/api/contests/scores/stream?contestSlug=...`.
+- `contest` is the `<name>` in the portal URL `codingcontest.org/contests/<name>/game`. If it is
+  unset, the client uses your one RUNNING registration. Training runs may not appear there, so set it
+  for training.
+- **Option B** if the cookie route fails: copy the game's own credentials from DevTools (any request to
+  `https://<game>.codingcontest.org/api/...`). Set `game_token` (the `Authorization` header value),
+  `game_url` (e.g. `https://spaceship.codingcontest.org`) and `contest_slug` (the `x-ccc-slug`
+  header value).
+- Credentials expire. On HTTP 401/403, copy fresh ones.
+- `platform = "manual"` still works: `submit` then just lists the files to upload in the browser.
 
-## What we don't know yet (needs a HAR)
+**Not yet verified live:** the cookie → game-token step (XSRF header), and whether `x-ccc-slug` is the
+contest slug (it was the only header value the sanitiser dropped). `cargo ccc progress` tests both
+without side effects. Run it once in a training game before Friday.
 
-- The game's endpoints for downloading a level and uploading outputs, and how the token is sent
-  (header, cookie or query parameter).
-- The file names and layout of a download (still `level3_1_small.in`?), and the statement format
-  (PDF, or rendered in the app).
-- Whether source code must be uploaded alongside outputs.
-- The upload response (does it say per file whether it's valid?).
-- **The "0000" code** a Cloudflight person mentioned. It's probably entered somewhere in the game app.
-  Note where.
+## The API
 
-Until then, `platform = "manual"`: `cargo ccc submit N` re-validates, checks freshness, and lists
-the files to upload in the browser. Ingest already accepts zips, folders and loose files, and
-detects the level from names (or `--level N`), so manual downloads of any shape work.
+**Portal `https://codingcontest.org`** (Angular SPA, cookie session, Spring-style XSRF: the
+`XSRF-TOKEN` cookie is echoed in an `X-XSRF-TOKEN` header)
+- `GET /api/contests/{name}` → `{slug, gameSlug, gameBaseUrl, status, startTime, durationMinutes, totalLevels, ...}`.
+  Note that `slug` uses `-` where the URL name has `.` (`…2025-11…` vs `…2025.11…`).
+- `GET /api/contests/my-registrations` → `[{contestSlug, contestName, status, ...}]`
+- `POST /api/game-token {"contestSlug": slug}` → `{"token": "<uuid>"}`
+- `POST /api/training/{gameSlug}/start?mode=challenge|exploration` starts a training run
+  (`challenge` is timed with levels unlocking in order, `exploration` is untimed).
+- Public: `GET /api/games` (every game's `slug`, `baseUrl`, `totalLevels`), `GET /api/editions/active`.
 
-## Capturing the HAR (about 10 minutes)
+**Game app `https://<game>.codingcontest.org`**, embedded in the portal as an iframe. The portal sends
+it the token via `postMessage({type: "ccc:auth-token", token, contestSlug, ...})`. API requests carry
+`Authorization: <token>` (raw, no `Bearer`) and `x-ccc-slug`.
+- `GET /game/game-info` (no auth): per level `inputFiles: ["0-example","1-small","2-large"]`,
+  `unscoredFiles: ["0-example"]`, `scoreDirection`, `optimization`, `sandbox`.
+- `GET /api/contestant/contestant-info` → `{score: {gameScore: {level, timeMs}, state: {level1: {submissions: [{fileId, submittedAt, result: {correct}}], passedFiles}}}}`
+- `GET /api/contestant/level/{L}/files` → `{url}`: a short-lived signed link to
+  `files.codingcontest.org/game-files/<game>/level-{L}.zip`.
+- `GET /api/contestant/level/{L}/input/{fileId}` → `{url}` for a single input file. The UI loads the
+  small one up front and the large one when you click it. Inputs are not gated on each other.
+- `POST /api/contestant/submit-{L}-{fileId}` with multipart field `solution` (the file name doesn't
+  matter) → `{evaluation: {isCorrect, cases: [{isCorrect, caseState, startLineNumber, endLineNumberExcl, caseMessage}]}}`.
+  A wrong answer is graded per case with a message like `"Wrong value on line 1, got '…'"`.
 
-1. Log in at codingcontest.org and pick a past game (spaceship is good: our old Level 1–4 code
-   solved it). Choose **challenge** mode.
-2. Before clicking start: open DevTools (F12) → **Network**, tick **Preserve log**, and turn
-   off "Disable cache". Clear the log.
-3. Start the game. Download level 1's files. Look out for any place you type a code like "0000".
-4. Upload one output. A deliberately wrong one is fine in training; it shows the rejection response.
-5. If the game asks for source code, upload a file too.
-6. Network panel → right-click → **Save all as HAR with content**. Save it outside the repo or as
-   `*.har` (git-ignored). **The HAR contains your session tokens**, so don't commit or share it.
-7. In Claude Code: "read <path>.har and implement `harness/src/platform/codingcontest.rs`".
+**Level zip** (`level-1.zip`):
+```
+in_level-1_0-example.txt   out_level-1_0-example.txt   ← worked example (LF line endings)
+in_level-1_1-small.txt     in_level-1_2-large.txt      ← real inputs
+level-1.pdf                                            ← statement
+```
+Outputs are written as `out_level-1_1-small.txt` etc. The harness still understands CatCoder's
+`level1_1_small.in/.out` naming.
 
-## Porting notes (Java `ccc-pipeline` → `ccc-rs`)
+## Still unknown
 
-| Java | Rust | Change |
-|------|------|--------|
-| `ccc/core/Solver.java` + reflection | `pub fn solve(&str) -> Vec<String>` + `solution/build.rs` | still one file per level, no registry |
-| `ccc/core/Io.java` (always CRLF) | `harness/src/io.rs` | output style copied from the example `.out` (or forced in `ccc.toml`) |
-| `Cli.ingest` (zip, `level\d_` names) | `harness/src/ingest.rs` | also folders, loose files, nested zips, `--level N` |
-| `Cli.validate/all/run` | `harness/src/cli.rs` | multiple examples, panics report the file; plus `bench`, `new-level`, `status` |
-| `CatCoder.java` + `Json.java` | `harness/src/platform/` | `manual` now; `codingcontest` after the HAR |
-| `ccc.local.properties` | `ccc.toml` + `ccc.local.toml` | flat key = value |
-| `.claude/commands/*.md` | `.claude/skills/*/SKILL.md` | same steps, Rust paths, Claude may run `validate` itself |
-| one repo for all years | template + `new-contest.sh` | one repo per contest |
+- **The "0000" code** a Cloudflight person mentioned. It wasn't in the captured traffic.
+- **`sandbox: true`** on Spaceship levels 4–8. Maybe an in-browser simulator, or a different
+  submission type. Check when you reach one.
+- Whether wrong submissions cost penalty time. `submit` asks for confirmation either way.
+
+## Capturing another HAR
+
+1. DevTools (F12) → Network, tick **Preserve log**, filter **All**, then **reload** the game page so
+   the game's startup requests are captured.
+2. Do the thing you want to learn (download, upload, sandbox, ...).
+3. Right-click → **Save all as HAR with content** into `docs/` (`*.har` is git-ignored).
+4. `python3 tools/sanitize_har.py` → `docs/har-summary.json`. Review it, then share that instead of the HAR.
+5. Delete the HAR afterwards. It holds live session tokens.

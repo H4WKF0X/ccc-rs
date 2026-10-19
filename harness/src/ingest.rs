@@ -2,7 +2,8 @@
 //!
 //! Accepts zip files (nested zips too), directories and loose files, so it keeps working whatever
 //! shape the new platform's downloads take. With no paths it takes the newest level-looking zip
-//! from the Downloads folder. `*.in` / `*.out` go to `in/`, everything else to `statement/`.
+//! from the Downloads folder. Inputs and expected outputs (`in_*.txt`/`out_*.txt`, or `*.in`/`*.out`)
+//! go to `in/`, everything else (the statement PDF, images, ...) to `statement/`.
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -10,11 +11,11 @@ use std::io::{Cursor, Read, Seek};
 use std::path::{Path, PathBuf};
 
 use crate::config::Config;
-use crate::layout::{Workspace, has_extension};
+use crate::layout::{Workspace, has_extension, is_data_name};
 
-struct File {
-    name: String,
-    bytes: Vec<u8>,
+pub(crate) struct File {
+    pub name: String,
+    pub bytes: Vec<u8>,
 }
 
 pub fn run(ws: &Workspace, cfg: &Config, args: &[String]) -> Result<bool, String> {
@@ -39,8 +40,13 @@ pub fn run(ws: &Workspace, cfg: &Config, args: &[String]) -> Result<bool, String
     for path in &paths {
         collect(path, &mut files)?;
     }
+    store(ws, &files, level_override)
+}
+
+/// Write unpacked files into `work/level<N>/` and print what arrived.
+pub(crate) fn store(ws: &Workspace, files: &[File], level_override: Option<u32>) -> Result<bool, String> {
     if files.is_empty() {
-        return Err("nothing to ingest: no files found in the given paths".into());
+        return Err("nothing to ingest: no files found".into());
     }
     let level = match level_override {
         Some(n) => n,
@@ -51,9 +57,8 @@ pub fn run(ws: &Workspace, cfg: &Config, args: &[String]) -> Result<bool, String
     for dir in [&in_dir, &statement_dir, &ws.out_dir(level)] {
         fs::create_dir_all(dir).map_err(|e| format!("could not create {}: {e}", dir.display()))?;
     }
-    for file in &files {
-        let is_data = has_extension(Path::new(&file.name), "in") || has_extension(Path::new(&file.name), "out");
-        let dest = if is_data { &in_dir } else { &statement_dir }.join(&file.name);
+    for file in files {
+        let dest = if is_data_name(&file.name) { &in_dir } else { &statement_dir }.join(&file.name);
         fs::write(&dest, &file.bytes).map_err(|e| format!("could not write {}: {e}", dest.display()))?;
     }
 
@@ -118,7 +123,7 @@ fn collect(path: &Path, out: &mut Vec<File>) -> Result<(), String> {
 
 /// Add one file, unpacking it if it is a zip. Only the base name is kept, so archive paths can't
 /// escape the target directory.
-fn add(name: String, bytes: Vec<u8>, out: &mut Vec<File>) -> Result<(), String> {
+pub(crate) fn add(name: String, bytes: Vec<u8>, out: &mut Vec<File>) -> Result<(), String> {
     if name.starts_with('.') {
         return Ok(());
     }
@@ -153,10 +158,10 @@ fn read_zip<R: Read + Seek>(reader: R, zip_name: &str, out: &mut Vec<File>) -> R
     Ok(())
 }
 
-/// The level named in the file names (`level3_1_small.in`, `Level 3.pdf`, ...). Data files
-/// (`.in`/`.out`) decide when they name a level; it's an error if they disagree.
+/// The level named in the file names (`in_level-3_1-small.txt`, `level3_1_small.in`, `Level 3.pdf`).
+/// Data files decide when they name a level; it's an error if they disagree.
 pub fn detect_level<'a>(names: impl Iterator<Item = &'a str> + Clone) -> Result<u32, String> {
-    let is_data = |n: &&str| has_extension(Path::new(n), "in") || has_extension(Path::new(n), "out");
+    let is_data = |n: &&str| is_data_name(n);
     let found = |names: Vec<&str>| names.into_iter().filter_map(level_in_name).collect::<BTreeSet<u32>>();
     let mut levels = found(names.clone().filter(is_data).collect());
     if levels.is_empty() {
@@ -197,6 +202,8 @@ mod tests {
         let names = ["level2_0_example.in", "level2_1_small.in", "overview level1.pdf"];
         assert_eq!(detect_level(names.iter().copied()), Ok(2));
         assert_eq!(detect_level(["Level 5.pdf", "a.in"].iter().copied()), Ok(5));
+        let new_style = ["in_level-4_0-example.txt", "out_level-4_0-example.txt", "level-4.pdf"];
+        assert_eq!(detect_level(new_style.iter().copied()), Ok(4));
         assert!(detect_level(["a.in", "b.pdf"].iter().copied()).is_err());
         assert!(detect_level(["level1_a.in", "level2_a.in"].iter().copied()).is_err());
     }
