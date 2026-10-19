@@ -17,6 +17,8 @@ byte for byte. A human runs validation and submission. You never upload anything
    - `in/in_level-<N>_0-example.txt` + `in/out_level-<N>_0-example.txt`: the worked example (known answer)
    - `in/in_level-<N>_1-small.txt`, `in/in_level-<N>_2-large.txt`: the real inputs (answers unknown)
    - `statement/level-<N>.pdf`: the problem description. Read this first.
+   - `statement/sandbox-level-<N>.html` (some levels): an offline visualiser whose `<script>` is the
+     game's checker, so it has the exact rules.
    (Old CatCoder naming `level<N>_0_example.in/.out` also works.)
 2. **You** read the statement and the example pair, then write or extend `level<N>.rs`.
 3. You may run `cargo ccc validate <N>` yourself and iterate until it says GO.

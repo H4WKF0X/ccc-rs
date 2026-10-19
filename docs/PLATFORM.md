@@ -68,14 +68,17 @@ in_level-1_0-example.txt   out_level-1_0-example.txt   ← worked example (LF li
 in_level-1_1-small.txt     in_level-1_2-large.txt      ← real inputs
 level-1.pdf                                            ← statement
 ```
+Levels with `sandbox: true` (Spaceship 4–8) also ship `sandbox-level-N.html`: an offline visualiser
+whose inline `<script>` is the game's full checker (input/solution format validation, simulation,
+collision rules, exact error messages). Open it in a browser to check an output by hand, and let Claude
+read the script to get the exact rules. Ingest puts it in `statement/`.
+
 Outputs are written as `out_level-1_1-small.txt` etc. The harness still understands CatCoder's
 `level1_1_small.in/.out` naming.
 
 ## Still unknown
 
 - **The "0000" code** a Cloudflight person mentioned. It wasn't in the captured traffic.
-- **`sandbox: true`** on Spaceship levels 4–8. Maybe an in-browser simulator, or a different
-  submission type. Check when you reach one.
 - Whether wrong submissions cost penalty time. `submit` asks for confirmation either way.
 
 ## Capturing another HAR
