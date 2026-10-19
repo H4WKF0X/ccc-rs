@@ -40,6 +40,35 @@ struct Game {
     base: String,
     token: String,
     slug: String,
+    /// Start, server "now" and duration, when we came through the portal (not with game_token).
+    clock: Option<Clock>,
+}
+
+struct Clock {
+    start_ms: u64,
+    server_now_ms: u64,
+    duration_ms: u64,
+}
+
+impl Clock {
+    fn from_contest(contest: &Value) -> Option<Clock> {
+        Some(Clock {
+            start_ms: parse_utc_ms(contest["startTime"].as_str()?)?,
+            server_now_ms: contest["serverNowMs"].as_u64()?,
+            duration_ms: contest["durationMinutes"].as_u64()? * 60_000,
+        })
+    }
+
+    fn describe(&self) -> String {
+        let elapsed = self.server_now_ms.saturating_sub(self.start_ms);
+        let left = self.duration_ms.saturating_sub(elapsed);
+        format!(
+            "{} elapsed, {} left (of {})",
+            format_ms(Some(elapsed)),
+            format_ms(Some(left)),
+            format_ms(Some(self.duration_ms))
+        )
+    }
 }
 
 impl Game {
@@ -48,14 +77,15 @@ impl Game {
         if let Some(token) = cfg.get("game_token") {
             let base = cfg.get("game_url").ok_or("game_token is set, so game_url must be too")?;
             let slug = cfg.get("contest_slug").ok_or("game_token is set, so contest_slug must be too")?;
-            return Ok(Game { agent, base: base.trim_end_matches('/').into(), token: token.into(), slug: slug.into() });
+            let base = base.trim_end_matches('/').into();
+            return Ok(Game { agent, base, token: token.into(), slug: slug.into(), clock: None });
         }
         let portal = Portal { agent: &agent, cookie: cfg.get("cookie").ok_or(MISSING_AUTH)? };
         let contest = portal.find_contest(cfg.get("contest"))?;
         let slug = str_field(&contest, "slug")?;
         let base = str_field(&contest, "gameBaseUrl")?.trim_end_matches('/').to_owned();
         let token = str_field(&portal.post_json("/api/game-token", &serde_json::json!({ "contestSlug": slug }))?, "token")?;
-        Ok(Game { agent, base, token, slug })
+        Ok(Game { agent, base, token, slug, clock: Clock::from_contest(&contest) })
     }
 
     fn request(&self, method: &str, path: &str) -> String {
@@ -173,7 +203,11 @@ pub fn progress(cfg: &Config) -> Result<bool, String> {
     let info = game.progress()?;
     let score = &info["score"]["gameScore"];
     println!("Contest {} on {}", game.slug, game.base);
-    println!("  current level: {}   time: {}", score["level"], format_ms(score["timeMs"].as_u64()));
+    if let Some(clock) = &game.clock {
+        println!("  contest clock: {}", clock.describe());
+    }
+    // gameScore.timeMs is the score's time component, not a clock: 0 until a level is passed.
+    println!("  current level: {}   score time: {}", score["level"], format_ms(score["timeMs"].as_u64()));
     if let Some(levels) = info["score"]["state"].as_object() {
         for (level, state) in levels {
             let subs = state["submissions"].as_array().map_or(&[][..], Vec::as_slice);
@@ -303,8 +337,32 @@ fn confirm() -> Result<bool, String> {
     Ok(line.trim().eq_ignore_ascii_case("yes"))
 }
 
+/// `h:mm:ss`.
 fn format_ms(ms: Option<u64>) -> String {
-    ms.map_or("?".into(), |ms| format!("{}:{:02}", ms / 60_000, ms / 1000 % 60))
+    ms.map_or("?".into(), |ms| {
+        let s = ms / 1000;
+        format!("{}:{:02}:{:02}", s / 3600, s / 60 % 60, s % 60)
+    })
+}
+
+/// `2026-10-19T09:16:22.802336Z` -> Unix milliseconds. UTC (`Z`) only, which is what the portal sends.
+fn parse_utc_ms(s: &str) -> Option<u64> {
+    let s = s.strip_suffix('Z')?;
+    let (date, time) = s.split_once('T')?;
+    let mut d = date.split('-').map(|p| p.parse::<i64>());
+    let (y, m, day) = (d.next()?.ok()?, d.next()?.ok()?, d.next()?.ok()?);
+    let (hms, frac) = time.split_once('.').unwrap_or((time, "0"));
+    let mut t = hms.split(':').map(|p| p.parse::<i64>());
+    let (hh, mm, ss) = (t.next()?.ok()?, t.next()?.ok()?, t.next()?.ok()?);
+    let millis: i64 = format!("{frac:0<3}")[..3].parse().ok()?;
+    // Days since 1970-01-01 (Howard Hinnant's days_from_civil).
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + day - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    let days = era * 146_097 + doe - 719_468;
+    u64::try_from(((days * 24 + hh) * 60 + mm) * 60_000 + ss * 1000 + millis).ok()
 }
 
 fn clip(s: &str, max: usize) -> String {
@@ -326,6 +384,15 @@ mod tests {
             "--B\r\nContent-Disposition: form-data; name=\"solution\"; filename=\"out_level-1_1-small.txt\"\r\n\
              Content-Type: text/plain\r\n\r\n1\r\n2\r\n\r\n--B--\r\n"
         );
+    }
+
+    #[test]
+    fn parses_portal_timestamps() {
+        assert_eq!(parse_utc_ms("1970-01-01T00:00:00Z"), Some(0));
+        assert_eq!(parse_utc_ms("2026-10-19T09:16:22.802336Z"), Some(1_792_401_382_802));
+        assert_eq!(parse_utc_ms("2024-02-29T23:59:59.5Z"), Some(1_709_251_199_500));
+        assert_eq!(parse_utc_ms("2026-10-19T09:16:22"), None);
+        assert_eq!(format_ms(Some(14_400_000)), "4:00:00");
     }
 
     #[test]
