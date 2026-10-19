@@ -73,6 +73,11 @@ whose inline `<script>` is the game's full checker (input/solution format valida
 collision rules, exact error messages). Open it in a browser to check an output by hand, and let Claude
 read the script to get the exact rules. Ingest puts it in `statement/`.
 
+Sandbox levels can accept **many valid answers** (Spaceship 6: any collision-free flight within the time
+limit), so a byte-for-byte match with the example is the wrong test. Run that same script headlessly
+as the checker (`checker` in `ccc.toml`, see `checker/README.md`). Then `validate`, `all` and `submit`
+let the game's checker decide, and real outputs get checked before upload too.
+
 Outputs are written as `out_level-1_1-small.txt` etc. The harness still understands CatCoder's
 `level1_1_small.in/.out` naming.
 

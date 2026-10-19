@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Instant;
 
+use crate::checker::{self, Checker};
 use crate::config::Config;
 use crate::io::{self, OutputStyle};
 use crate::layout::{Workspace, file_name};
@@ -101,6 +102,7 @@ impl Ctx<'_> {
     fn validate(&self, n: u32) -> Result<bool, String> {
         let solve = self.solver(n)?;
         let style = self.style(n)?;
+        let checker = Checker::for_level(&self.ws, &self.cfg, n);
         let mut checked = 0;
         let mut all_go = true;
         for example in self.ws.examples(n)? {
@@ -126,10 +128,33 @@ impl Ctx<'_> {
                      Output style is {}; check it if an upload is rejected.",
                     style.describe()
                 ),
-                Verdict::NoGo(detail) => {
-                    println!("NO-GO — level {n} does not match {name}.\n{detail}");
-                    all_go = false;
-                }
+                Verdict::NoGo(detail) => match &checker {
+                    // Many valid answers: the checker, not the example, decides.
+                    Some(checker) => {
+                        let out = self.ws.level_dir(n).join("check").join(file_name(&expected_path));
+                        io::write_lines(&out, &produced, style)?;
+                        match checker.check(&self.ws.root, &example.input, &out) {
+                            Ok(()) => println!(
+                                "GO (checker) — level {n}, {name}: differs from the example, but {} accepts it.",
+                                checker.describe()
+                            ),
+                            Err(reason) => {
+                                println!("NO-GO — level {n}, {name}: checker {reason}\n{detail}");
+                                all_go = false;
+                            }
+                        }
+                    }
+                    None => {
+                        println!("NO-GO — level {n} does not match {name}.\n{detail}");
+                        if checker::sandbox_file(&self.ws, n).is_some() {
+                            println!(
+                                "    This level ships a sandbox checker. If it accepts several valid answers, set\n    \
+                                 `checker` in ccc.toml so the game's checker decides (see docs/PLATFORM.md)."
+                            );
+                        }
+                        all_go = false;
+                    }
+                },
             }
         }
         if checked == 0 {
@@ -146,6 +171,7 @@ impl Ctx<'_> {
         }
         let solve = self.solver(n)?;
         let style = self.style(n)?;
+        let checker = Checker::for_level(&self.ws, &self.cfg, n);
         let mut produced = Vec::new();
         let mut ok = true;
         for input in self.ws.real_inputs(n)? {
@@ -154,6 +180,7 @@ impl Ctx<'_> {
                     let out = self.ws.output_for(n, &input);
                     io::write_lines(&out, &lines, style)?;
                     produced.push(format!("{} ({} lines)", file_name(&out), lines.len()));
+                    ok &= self.check_output(checker.as_ref(), &input, &out);
                 }
                 Err(e) => {
                     println!("FAILED — {e}");
@@ -162,10 +189,27 @@ impl Ctx<'_> {
             }
         }
         println!("Produced {} output file(s) [{}]: {}", produced.len(), style.describe(), produced.join(", "));
-        if ok {
+        if !ok {
+            println!("Do not submit: fix the failures above first (`submit` re-runs the checker).");
+        } else {
             println!("Next: review (/review {n}), then `cargo ccc submit {n}`");
         }
         Ok(ok)
+    }
+
+    /// Run the checker (if any) on one real output and report; true when accepted or unchecked.
+    fn check_output(&self, checker: Option<&Checker>, input: &Path, out: &Path) -> bool {
+        let Some(checker) = checker else { return true };
+        match checker.check(&self.ws.root, input, out) {
+            Ok(()) => {
+                println!("  checker: OK        {}", file_name(out));
+                true
+            }
+            Err(reason) => {
+                println!("  checker: REJECTED  {}: {reason}", file_name(out));
+                false
+            }
+        }
     }
 
     fn run(&self, args: &[String]) -> Result<bool, String> {
@@ -259,6 +303,10 @@ impl Ctx<'_> {
             })?;
             if source_time.is_some_and(|src| src > out_time) {
                 println!("Refusing to submit: {} is older than level{n}.rs. Run `cargo ccc all {n}`.", file_name(&out));
+                return Ok(false);
+            }
+            if !self.check_output(Checker::for_level(&self.ws, &self.cfg, n).as_ref(), &input, &out) {
+                println!("Refusing to submit: the checker rejects {}.", file_name(&out));
                 return Ok(false);
             }
             outputs.push(out);

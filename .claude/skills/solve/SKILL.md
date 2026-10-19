@@ -23,8 +23,9 @@ Solve level **$ARGUMENTS** of this contest.
    top (input, output, rule).
 6. Run `cargo ccc validate $ARGUMENTS`. On NO-GO, debug from the first difference it prints and
    iterate until GO. If the level allows several valid answers (sandbox levels often do), a
-   different-but-valid answer gives NO-GO. Check it against the sandbox checker's rules, and tell me
-   instead of contorting the solution to copy the example. Then reason about edge cases from the statement that the example doesn't
+   different-but-valid answer gives NO-GO. Don't contort the solution to copy the example. Make sure
+   the game's checker is set up instead: `checker/sandbox-check.js` (create or adapt it per
+   `checker/README.md`) plus `checker = ...` in `ccc.toml`. Then `validate` reports "GO (checker)". Then reason about edge cases from the statement that the example doesn't
    cover (empty records, zeros/negatives, ties, off-by-one, overflow).
 
 Do not run `cargo ccc submit` and do not edit `harness/`. When it's GO, tell me to run

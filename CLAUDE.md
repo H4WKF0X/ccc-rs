@@ -36,7 +36,9 @@ pub fn solve(input: &str) -> Vec<String>
 - The first line is usually a count `N`, then `N` records. Confirm against the statement.
 - **Match the example's output format exactly**: same numbers per line, same separators, blank
   lines where the example has them. If `validate` says NO-GO, the format or logic is wrong, not
-  the harness.
+  the harness. **Exception:** levels that accept many valid answers (usually sandbox levels). There the
+  game's checker decides (`checker` in `ccc.toml`, `checker/README.md`). Don't distort a valid
+  solution to copy the example's arbitrary choices.
 - Levels are registered automatically from file names (`solution/build.rs`). Adding a level means
   adding one file. `cargo ccc new-level <N> [--from <M>]` scaffolds it.
 - Do **not** edit `harness/` to make a level work. If the harness is truly wrong, say so.

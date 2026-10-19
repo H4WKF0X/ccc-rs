@@ -43,6 +43,7 @@ Other commands: `validate N`, `run N <in> [out]`, `bench N`, `new-level N [--fro
 | `ccc.toml` / `ccc.local.toml` | Contest settings / personal overrides (git-ignored). |
 | `CLAUDE.md`, `.claude/skills/` | Project memory and `/solve`, `/review` for Claude Code. |
 | `docs/PLATFORM.md` | The codingcontest.org API, credentials setup, HAR capture guide. |
+| `checker/` | Optional checker for levels with many valid answers (runs the game's sandbox script). |
 | `tools/sanitize_har.py` | Strip secrets from a browser HAR before sharing it. |
 | `work/` | Runtime only (git-ignored): ingested inputs, produced outputs, statements. |
 
@@ -50,7 +51,8 @@ Other commands: `validate N`, `run N <in> [out]`, `bench N`, `new-level N [--fro
 
 1. Rust (stable, edition 2024): `rustup` or your distro's package. Check with `cargo --version`.
 2. Claude Code: `npm install -g @anthropic-ai/claude-code`, then `claude` once to sign in.
-3. Optional: open a contest repo in RustRover / IntelliJ with the Rust plugin.
+3. Node.js, only if a game needs the sandbox checker (`checker/README.md`).
+4. Optional: open a contest repo in RustRover / IntelliJ with the Rust plugin.
 
 ## Team workflow (one contest repo)
 

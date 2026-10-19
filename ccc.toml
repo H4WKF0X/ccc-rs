@@ -14,6 +14,10 @@ platform = "manual"
 # "codingcontest": if unset, your one RUNNING registration is used.
 contest = ""
 
+# Output checker for levels with many valid answers (see checker/README.md). Empty = byte-for-byte only.
+# checker = "node checker/sandbox-check.js {sandbox} {input} {output}"
+checker = ""
+
 # Output line endings: "auto" copies the example .out; "crlf" or "lf" force one.
 line_ending = "auto"
 
