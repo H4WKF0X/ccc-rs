@@ -1,0 +1,3 @@
+# `cargo ccc <command>` from anywhere in the repo (works the same on Linux, macOS, Windows).
+[alias]
+ccc = "run --release -q -p solution --"

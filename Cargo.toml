@@ -1,0 +1,15 @@
+[workspace]
+resolver = "3"
+members = ["harness", "solution"]
+
+[workspace.package]
+edition = "2024"
+version = "0.1.0"
+publish = false
+
+[profile.release]
+opt-level = 3
+# Keep integer overflow checks on even in release: a silent wrap on the `_large` input is
+# the classic "passes the example, rejected on upload" bug. The cost is negligible.
+overflow-checks = true
+debug = "line-tables-only"

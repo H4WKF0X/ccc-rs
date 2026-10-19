@@ -1,0 +1,7 @@
+# Copy to ccc.local.toml (git-ignored) for personal overrides. Any key from ccc.toml can go here.
+#
+# downloads_dir = "/home/me/Downloads"
+#
+# For the future codingcontest.org client (not written yet; see docs/PLATFORM.md). Get it from your
+# browser while logged in to codingcontest.org: DevTools -> Application -> Cookies.
+# session = "PASTE_SESSION_COOKIE_VALUE"

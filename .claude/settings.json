@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo ccc validate:*)",
+      "Bash(cargo ccc run:*)",
+      "Bash(cargo ccc bench:*)",
+      "Bash(cargo ccc status:*)",
+      "Bash(cargo ccc new-level:*)",
+      "Bash(cargo ccc help:*)",
+      "Bash(cargo build:*)",
+      "Bash(cargo test:*)",
+      "Bash(cargo clippy:*)",
+      "Bash(cargo check:*)"
+    ],
+    "deny": [
+      "Bash(cargo ccc submit:*)"
+    ]
+  }
+}

@@ -1,0 +1,9 @@
+[package]
+name = "solution"
+description = "This contest's solvers: one src/levels/level<N>.rs per level."
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+
+[dependencies]
+harness = { path = "../harness" }

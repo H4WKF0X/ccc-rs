@@ -1,0 +1,16 @@
+# Build output
+/target/
+
+# Runtime working area (ingested inputs, produced outputs, statements)
+/work/
+
+# Secrets — each teammate keeps their own, never commit
+ccc.local.toml
+*.har
+
+# IDE / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db

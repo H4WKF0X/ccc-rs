@@ -1,0 +1,17 @@
+# Contest settings (committed). Personal secrets go in ccc.local.toml, which is git-ignored.
+
+# Set by new-contest.sh.
+name = "template"
+
+# The game on codingcontest.org (from https://codingcontest.org/api/games), when known.
+game_slug = ""
+
+# How `cargo ccc submit` delivers outputs: "manual" (you upload in the browser) or "codingcontest"
+# (direct upload, not written yet; see docs/PLATFORM.md).
+platform = "manual"
+
+# Output line endings: "auto" copies the example .out; "crlf" or "lf" force one.
+line_ending = "auto"
+
+# Where `cargo ccc ingest` without arguments looks for the newest level zip (default ~/Downloads).
+# downloads_dir = "/path/to/Downloads"
