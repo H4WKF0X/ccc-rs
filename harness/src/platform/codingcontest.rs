@@ -342,7 +342,7 @@ pub fn fetch(ws: &Workspace, cfg: &Config, level: u32) -> Result<bool, String> {
     println!("Downloaded level {level} ({} KB) from {}", bytes.len() / 1024, game.base);
     let mut files = Vec::new();
     ingest::add(format!("level-{level}.zip"), bytes, &mut files)?;
-    ingest::store(ws, &files, Some(level))
+    ingest::store(ws, cfg, &files, Some(level))
 }
 
 pub fn submit(cfg: &Config, level: u32, outputs: &[PathBuf], yes: bool) -> Result<bool, String> {

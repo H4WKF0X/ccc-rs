@@ -52,6 +52,7 @@ Other commands: `progress`, `ingest <zip|dir|files> [--level N]`, `run N <in> [o
 | `docs/PLATFORM.md` | The codingcontest.org API, credentials setup, HAR capture guide. |
 | `checker/` | Judges many-valid-answer levels with the game's own sandbox script (on by default, self-tested). |
 | `tools/sanitize_har.py` | Strip secrets from a browser HAR before sharing it. |
+| `harness/src/guard.rs` | Prompt-injection guard: hidden text in statement PDFs (runs on every fetch/ingest, ~5 s). |
 | `tools/notify.sh` | Sound when Claude needs you (Claude Code hook in `.claude/settings.json`). |
 | `work/` | Runtime only (git-ignored): ingested inputs, produced outputs, statements. |
 
@@ -59,7 +60,8 @@ Other commands: `progress`, `ingest <zip|dir|files> [--level N]`, `run N <in> [o
 
 1. Rust (stable, edition 2024): `rustup` or your distro's package. Check with `cargo --version`.
 2. Claude Code: `npm install -g @anthropic-ai/claude-code`, then `claude` once to sign in.
-3. Node.js (for the sandbox checker) and Firefox (the login is read from it).
+3. Node.js (for the sandbox checker), Firefox (the login is read from it) and Ghostscript `gs` (for the
+   prompt-injection guard; usually preinstalled on Linux, `brew install ghostscript` on macOS).
 4. Optional: open a contest repo in RustRover / IntelliJ with the Rust plugin.
 
 ## Team workflow (one contest repo)

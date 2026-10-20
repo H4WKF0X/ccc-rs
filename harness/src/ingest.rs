@@ -40,11 +40,11 @@ pub fn run(ws: &Workspace, cfg: &Config, args: &[String]) -> Result<bool, String
     for path in &paths {
         collect(path, &mut files)?;
     }
-    store(ws, &files, level_override)
+    store(ws, cfg, &files, level_override)
 }
 
 /// Write unpacked files into `work/level<N>/` and print what arrived.
-pub(crate) fn store(ws: &Workspace, files: &[File], level_override: Option<u32>) -> Result<bool, String> {
+pub(crate) fn store(ws: &Workspace, cfg: &Config, files: &[File], level_override: Option<u32>) -> Result<bool, String> {
     if files.is_empty() {
         return Err("nothing to ingest: no files found".into());
     }
@@ -62,6 +62,7 @@ pub(crate) fn store(ws: &Workspace, files: &[File], level_override: Option<u32>)
         fs::write(&dest, &file.bytes).map_err(|e| format!("could not write {}: {e}", dest.display()))?;
     }
 
+    crate::guard::run(ws, cfg, level);
     let examples = ws.examples(level)?;
     let real = ws.real_inputs(level)?;
     let names = |ps: Vec<PathBuf>| ps.iter().map(|p| crate::layout::file_name(p)).collect::<Vec<_>>().join(", ");

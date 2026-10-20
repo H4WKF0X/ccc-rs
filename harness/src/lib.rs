@@ -20,6 +20,7 @@ pub mod cache;
 pub mod checker;
 pub mod config;
 pub mod debug;
+pub mod guard;
 pub mod ingest;
 pub mod io;
 pub mod layout;

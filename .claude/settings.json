@@ -17,18 +17,36 @@
       "Bash(cargo clippy:*)",
       "Bash(cargo check:*)",
       "Bash(cargo fmt:*)",
-      "Bash(node checker/sandbox-check.js:*)"
+      "Bash(node checker/sandbox-check.js:*)",
+      "Bash(cargo ccc guard:*)"
     ],
     "ask": [
       "Bash(cargo ccc submit:*)"
+    ],
+    "deny": [
+      "Read(./work/*/quarantine/**)"
     ]
   },
   "hooks": {
     "Notification": [
-      { "hooks": [{ "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/tools/notify.sh" }] }
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/tools/notify.sh"
+          }
+        ]
+      }
     ],
     "Stop": [
-      { "hooks": [{ "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/tools/notify.sh" }] }
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/tools/notify.sh"
+          }
+        ]
+      }
     ]
   }
 }

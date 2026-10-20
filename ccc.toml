@@ -19,6 +19,14 @@ contest = ""
 # example answer, and if it can't run you get a warning, never a block. "" turns it off.
 checker = "node checker/sandbox-check.js {sandbox} {input} {output}"
 
+# Prompt-injection guard: after each fetch/ingest, compare the statement PDF's pages (what a human sees)
+# with its text layer (what an AI reads), using a locked-down headless Claude session (~5 s per level).
+# Hidden text -> the PDF is replaced by an image-only copy, the original goes to quarantine/.
+# Needs Ghostscript (`gs`) and the `claude` CLI; if either is missing it only warns. "off" disables it.
+guard = "on"
+guard_model = "claude-opus-5-5"
+guard_effort = "low"
+
 # Output line endings: "auto" copies the example output; "crlf" or "lf" force one.
 line_ending = "auto"
 
