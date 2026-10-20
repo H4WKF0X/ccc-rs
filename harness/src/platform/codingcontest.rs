@@ -241,10 +241,17 @@ impl Portal<'_> {
                 ));
             }
         }
-        match self.get_json("/api/training/active") {
-            Ok(active) if !active.is_null() => self.load_contest(&active),
-            _ => Err("no running contest or active training found. Start one in the browser, or set contest = \
-                      \"<name from the portal URL /contests/<name>/game>\" in ccc.toml"
+        // A list of training summaries (an object in older responses); take the most recently started.
+        let active = self.get_json("/api/training/active").unwrap_or(Value::Null);
+        let latest = match &active {
+            Value::Array(runs) => runs.iter().max_by_key(|r| r["startTime"].as_str().unwrap_or("")),
+            Value::Object(_) => Some(&active),
+            _ => None,
+        };
+        match latest {
+            Some(run) => self.load_contest(run),
+            None => Err("no running contest or active training found. Start one in the browser, or set contest = \
+                         \"<name from the portal URL /contests/<name>/game>\" in ccc.toml"
                 .into()),
         }
     }

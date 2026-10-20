@@ -29,6 +29,13 @@ $toml = Join-Path $Dest 'ccc.toml'
 (Get-Content $toml) `
     -replace '^name = .*', "name = `"$Name`"" `
     -replace '^game_slug = .*', "game_slug = `"$Game`"" | Set-Content $toml
+# Unique package and binary names: contest repos share one build directory (see .cargo/config.toml).
+$id = $Name -replace '\.', '-'
+foreach ($f in @('harness/Cargo.toml', 'solution/Cargo.toml')) {
+    $path = Join-Path $Dest $f
+    (Get-Content $path) -replace 'harness-template', "harness-$id" -replace 'solution-template', "solution-$id" `
+        -replace '"ccc-template"', "`"ccc-$id`"" | Set-Content $path
+}
 
 Push-Location $Dest
 try {

@@ -23,6 +23,9 @@ cd ../ccc-ccc42 && claude              # then in Claude Code:
 # Windows: ./new-contest.ps1 ccc42 [dest]
 ```
 
+All contest repos next to the template share one build directory (`../.ccc-target`): the first
+build on a machine compiles the dependencies once (~1 min), after that a new repo is ready in ~2 s.
+
 `/level` drives everything with ordinary commands, which you can also run yourself:
 
 ```bash

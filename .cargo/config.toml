@@ -1,3 +1,10 @@
 # `cargo ccc <command>` from anywhere in the repo (works the same on Linux, macOS, Windows).
 [alias]
-ccc = "run --release -q -p solution --"
+ccc = "run --release -q --"
+
+# One build directory shared by the template and every contest repo next to it (relative to this
+# repo's root): dependencies compile once per machine (~1 min), then a new contest repo only builds
+# its own two crates (~2 s). Each repo's crates have their own package names (harness-<contest>,
+# solution-<contest>, set by new-contest), so repos never share or run each other's code.
+[build]
+target-dir = "../.ccc-target"

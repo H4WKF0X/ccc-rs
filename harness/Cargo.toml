@@ -1,9 +1,13 @@
 [package]
-name = "harness"
+# Unique per contest repo (new-contest sets it); the crate is always used as `harness`.
+name = "harness-template"
 description = "CCC pipeline engine: I/O contract, ingest, validation, platform client. Levels never edit this."
 edition.workspace = true
 version.workspace = true
 publish.workspace = true
+
+[lib]
+name = "harness"
 
 [dependencies]
 lz4_flex = "0.14.0"

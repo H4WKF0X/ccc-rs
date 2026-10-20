@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = ["harness", "solution"]
+default-members = ["solution"]
 
 [workspace.package]
 edition = "2024"

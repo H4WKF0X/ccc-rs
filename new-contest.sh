@@ -32,6 +32,13 @@ rm -f "$dest/new-contest.sh" "$dest/new-contest.ps1"
 tmp="$(mktemp)"
 sed -e "s/^name = .*/name = \"$name\"/" -e "s/^game_slug = .*/game_slug = \"$game\"/" "$dest/ccc.toml" > "$tmp"
 mv "$tmp" "$dest/ccc.toml"
+# Unique package and binary names: contest repos share one build directory (see .cargo/config.toml).
+id="$(printf %s "$name" | tr . -)"
+for f in harness/Cargo.toml solution/Cargo.toml; do
+  tmp="$(mktemp)"
+  sed -e "s/harness-template/harness-$id/" -e "s/solution-template/solution-$id/" -e "s/\"ccc-template\"/\"ccc-$id\"/" "$dest/$f" > "$tmp"
+  mv "$tmp" "$dest/$f"
+done
 
 cd "$dest"
 git init -q -b main
