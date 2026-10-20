@@ -23,7 +23,11 @@ const SWITCH_TO_MANUAL: &str = "cargo ccc mode manual";
 pub fn submit(ws: &Workspace, cfg: &Config, level: u32, outputs: &[PathBuf], yes: bool) -> Result<bool, String> {
     match cfg.mode() {
         "manual" => manual::submit(ws, cfg, level, outputs),
-        _ => codingcontest::submit(cfg, level, outputs, yes),
+        _ => codingcontest::submit(cfg, level, outputs, yes).map_err(|e| {
+            format!(
+                "{e}\n  If the game API keeps failing: check in the browser which uploads went through, then {SWITCH_TO_MANUAL}"
+            )
+        }),
     }
 }
 
@@ -32,12 +36,12 @@ pub fn fetch(ws: &Workspace, cfg: &Config, level: u32) -> Result<bool, String> {
     match cfg.mode() {
         "manual" => manual::fetch(ws, cfg, level),
         _ => codingcontest::fetch(ws, cfg, level).map_err(|e| {
-            format!("{e}\n  If the login doesn't work, switch to manual mode: {SWITCH_TO_MANUAL}")
+            format!("{e}\n  If the game API keeps failing (`cargo ccc login` says GAME API FAILED): {SWITCH_TO_MANUAL}")
         }),
     }
 }
 
-/// Check the login, with an unmistakable LOGIN OK / LOGIN FAILED result.
+/// Check the account login and the game API, with one unmistakable state (see codingcontest::login).
 pub fn login(cfg: &Config) -> Result<bool, String> {
     match cfg.mode() {
         "manual" => {

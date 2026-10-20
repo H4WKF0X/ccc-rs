@@ -42,7 +42,11 @@ For each level N:
      browser; you don't see the verdict. Go straight on to step 1 for level N+1: `fetch` waits until
      the human has downloaded the next zip, which also means level N passed. If the human interrupts
      with a WRONG message, treat it like `[WRONG]` above (fix, `all`, `submit` again).
-7. Stop when `submit` says the game is complete (or `fetch` says there is no such level), or when the
+7. **If the game API fails** in online mode (`fetch`/`submit` errors about codingcontest.org, not about
+   your code), don't retry in a loop and don't switch modes yourself: stop and tell the human to run
+   `cargo ccc login`, and `cargo ccc mode manual` if it says GAME API FAILED. Before a resubmit after
+   a failed upload, the human checks in the browser which uploads went through.
+8. Stop when `submit` says the game is complete (or `fetch` says there is no such level), or when the
    human interrupts.
 
 Never edit `harness/`, never run `cargo ccc guard-html`, and never open `work/*/quarantine/`. If the

@@ -58,7 +58,6 @@ cat <<MSG
 
 When the contest starts (runbook: docs/CONTEST-DAY.md):
   1. Open the game in the browser (Firefox, logged in to codingcontest.org).
-  2. cd "$dest" && cargo ccc login     -> must say LOGIN OK
+  2. cd "$dest" && cargo ccc login     -> LOGIN OK: go on.  GAME API FAILED: cargo ccc mode manual
   3. claude, then /level                -> fetch, check, solve, submit (you approve), next level ...
-  LOGIN FAILED? cargo ccc mode manual   -> zips and uploads go through ~/Downloads; then claude + /level
 MSG

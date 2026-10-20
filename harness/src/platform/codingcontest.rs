@@ -85,8 +85,8 @@ impl Clock {
 impl Game {
     fn connect(cfg: &Config) -> Result<Game, String> {
         Game::connect_staged(cfg).map_err(|e| match e {
-            Connect::Login(why) => why,
-            Connect::NoContest { why, .. } => why,
+            Connect::Login(why) | Connect::NoContest { why, .. } | Connect::GameApi { why, .. } => why,
+            Connect::NotStarted { contest, start, .. } => format!("{contest} has not started yet (starts {start})"),
         })
     }
 
@@ -125,14 +125,26 @@ impl Game {
                 "codingcontest.org did not accept the login ({auth}); it has probably expired.\n{LOGIN_HELP}"
             )));
         };
-        let no_contest = |why: String| Connect::NoContest { user: user.clone(), why };
-        let contest = portal.find_contest(cfg.get("contest")).map_err(no_contest)?;
-        let slug = str_field(&contest, "slug").map_err(no_contest)?;
-        let base = str_field(&contest, "gameBaseUrl").map_err(no_contest)?.trim_end_matches('/').to_owned();
+        // Nothing running: a contest that hasn't started yet is expected, not an error.
+        let contest = match portal.find_contest(cfg.get("contest")) {
+            Ok(contest) if is_running(&contest) => contest,
+            Ok(contest) => return Err(not_running(&user, &contest)),
+            Err(why) => {
+                return Err(match portal.upcoming_registration() {
+                    Some(reg) => not_running(&user, &reg),
+                    None => Connect::NoContest { user, why },
+                });
+            }
+        };
+        // From here on the contest is running, so a failure means the game API doesn't work for us.
+        let name = contest["slug"].as_str().unwrap_or("the contest").to_owned();
+        let api_failed = |why: String| Connect::GameApi { user: user.clone(), contest: name.clone(), why };
+        let slug = str_field(&contest, "slug").map_err(api_failed)?;
+        let base = str_field(&contest, "gameBaseUrl").map_err(api_failed)?.trim_end_matches('/').to_owned();
         let token = portal
             .post_json("/api/game-token", &serde_json::json!({ "contestSlug": slug }))
             .and_then(|t| str_field(&t, "token"))
-            .map_err(no_contest)?;
+            .map_err(api_failed)?;
         let username = Some(user);
         Ok(Game {
             agent,
@@ -210,10 +222,48 @@ impl Game {
     }
 }
 
-/// Why `connect` failed: the login itself, or (logged in, but) finding/opening the contest.
+/// Why `connect` failed. Only `GameApi` (the contest runs, but we can't use its API) is a reason to
+/// switch to manual mode; `NotStarted` before the start is simply expected.
 enum Connect {
+    /// The account login (cookie) is missing or rejected.
     Login(String),
+    /// Logged in; the contest found is not running yet (or any more).
+    NotStarted { user: String, contest: String, start: String, status: String },
+    /// Logged in, but no running or upcoming contest at all.
     NoContest { user: String, why: String },
+    /// The contest is running, but getting the game token / talking to the game failed.
+    GameApi { user: String, contest: String, why: String },
+}
+
+fn is_running(contest: &Value) -> bool {
+    // Training runs and the real contest both report RUNNING (STATS_FROZEN: leaderboard frozen, still on).
+    matches!(contest["status"].as_str(), Some("RUNNING" | "STATS_FROZEN") | None)
+}
+
+/// A `NotStarted` for a contest record or registration summary.
+fn not_running(user: &str, c: &Value) -> Connect {
+    let contest = ["slug", "contestSlug", "contestName", "name"]
+        .iter()
+        .find_map(|k| c[*k].as_str())
+        .unwrap_or("the contest")
+        .to_owned();
+    let start = c["startTime"].as_str().map_or("at an unknown time".to_owned(), describe_start);
+    let status = c["status"].as_str().unwrap_or("?").to_owned();
+    Connect::NotStarted { user: user.to_owned(), contest, start, status }
+}
+
+/// `2026-10-23T08:00:00Z` -> `2026-10-23 08:00 UTC (in 1 h 12 min)` / `(started 3 min ago)`.
+fn describe_start(iso: &str) -> String {
+    let when = iso.get(..16).unwrap_or(iso).replace('T', " ");
+    let now_ms = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64);
+    match parse_utc_ms(iso) {
+        Some(start) => {
+            let mins = (start as i64 - now_ms) / 60_000;
+            let rel = |m: i64| if m >= 60 { format!("{} h {} min", m / 60, m % 60) } else { format!("{m} min") };
+            if mins >= 0 { format!("{when} UTC (in {})", rel(mins)) } else { format!("{when} UTC (started {} ago)", rel(-mins)) }
+        }
+        None => format!("{when} UTC"),
+    }
 }
 
 /// The portal, authenticated with the browser's cookies.
@@ -252,6 +302,16 @@ impl Portal<'_> {
     /// The contest to play: `contest` from the config (the `<name>` in the portal URL
     /// `/contests/<name>/game`), else your one running registration (a real contest beats a
     /// training run), else your active training run.
+    /// The next contest you're registered for that hasn't finished, if any (earliest start first).
+    fn upcoming_registration(&self) -> Option<Value> {
+        let regs = self.get_json("/api/contests/my-registrations").ok()?;
+        regs.as_array()?
+            .iter()
+            .filter(|r| !matches!(r["status"].as_str(), Some("FINISHED" | "CANCELLED")))
+            .min_by_key(|r| r["startTime"].as_str().unwrap_or("~").to_owned())
+            .cloned()
+    }
+
     fn find_contest(&self, configured: Option<&str>) -> Result<Value, String> {
         if let Some(name) = configured {
             return self.get_json(&format!("/api/contests/{name}"));
@@ -313,37 +373,67 @@ impl Portal<'_> {
 
 // ----------------------------------------------------------------------------- commands
 
-/// `cargo ccc login`: an unmistakable LOGIN OK / LOGIN FAILED, and what to do next.
+/// `cargo ccc login`: one unmistakable state, and what to do next. Only GAME API FAILED (the contest
+/// runs but we can't use its API) points to manual mode; before the start, "not started" is expected.
 pub fn login(cfg: &Config, switch_to_manual: &str) -> Result<bool, String> {
     let rule = "=".repeat(78);
-    match Game::connect_staged(cfg) {
-        Ok(game) => {
-            let level = game.progress().ok().as_ref().and_then(current_level);
-            let total = game.levels().map_or(String::new(), |t| format!(" of {t}"));
-            let left = game.clock.as_ref().map_or(String::new(), |c| format!(", {}", c.describe()));
-            println!("{rule}");
-            println!("LOGIN OK: {} @ {} (login from {})", game.username.as_deref().unwrap_or("?"), game.slug, game.auth);
-            println!("  game {}, level {}{total} unlocked{left}", game.base, level.map_or("?".into(), |l| l.to_string()));
-            println!("  Next: start `claude` in this folder and type /level");
-            println!("{rule}");
-            Ok(true)
+    let banner = |lines: &[String]| {
+        println!("{rule}");
+        lines.iter().for_each(|l| println!("{l}"));
+        println!("{rule}");
+    };
+    let game = match Game::connect_staged(cfg) {
+        Ok(game) => game,
+        Err(Connect::Login(why)) => {
+            banner(&[
+                format!("ACCOUNT LOGIN FAILED: {why}"),
+                "  Log in to codingcontest.org in Firefox, then run `cargo ccc login` again.".into(),
+                format!("  If it still fails once the contest runs: {switch_to_manual}"),
+            ]);
+            return Ok(false);
+        }
+        Err(Connect::NotStarted { user, contest, start, status }) => {
+            banner(&[
+                format!("ACCOUNT OK: {user}.  CONTEST NOT RUNNING: {contest} ({status}), starts {start}."),
+                "  That's expected before the start. Once it runs: open the game in the browser, then".into(),
+                "  `cargo ccc login` again: that checks the game API.".into(),
+            ]);
+            return Ok(false);
         }
         Err(Connect::NoContest { user, why }) => {
-            println!("{rule}");
-            println!("LOGGED IN as {user}, but NO CONTEST FOUND: {why}");
-            println!("  Before the start that's expected. Once it starts: open the game in the browser, then run");
-            println!("  `cargo ccc login` again. If it keeps failing: {switch_to_manual}");
-            println!("{rule}");
-            Ok(false)
+            banner(&[
+                format!("ACCOUNT OK: {user}.  NO CONTEST: {why}"),
+                "  Training: start a game in the browser. Contest: check your registration, or set".into(),
+                "  contest = \"<name>\" in ccc.toml (from the browser URL /contests/<name>/game).".into(),
+            ]);
+            return Ok(false);
         }
-        Err(Connect::Login(why)) => {
-            println!("{rule}");
-            println!("LOGIN FAILED: {why}");
-            println!("  Switch to manual mode (browser downloads/uploads via ~/Downloads): {switch_to_manual}");
-            println!("{rule}");
-            Ok(false)
+        Err(Connect::GameApi { user, contest, why }) => {
+            banner(&[
+                format!("GAME API FAILED: {user} @ {contest} is running, but: {why}"),
+                format!("  Switch to manual mode now: {switch_to_manual}"),
+            ]);
+            return Ok(false);
         }
-    }
+    };
+    let level = match game.progress() {
+        Ok(info) => current_level(&info),
+        Err(why) => {
+            banner(&[
+                format!("GAME API FAILED: {} is running, but the game app answered: {why}", game.slug),
+                format!("  Switch to manual mode now: {switch_to_manual}"),
+            ]);
+            return Ok(false);
+        }
+    };
+    let total = game.levels().map_or(String::new(), |t| format!(" of {t}"));
+    let left = game.clock.as_ref().map_or(String::new(), |c| format!(", {}", c.describe()));
+    banner(&[
+        format!("LOGIN OK: {} @ {} (login from {})", game.username.as_deref().unwrap_or("?"), game.slug, game.auth),
+        format!("  game {}, level {}{total} unlocked{left}", game.base, level.map_or("?".into(), |l| l.to_string())),
+        "  Next: start `claude` in this folder and type /level".into(),
+    ]);
+    Ok(true)
 }
 
 pub fn progress(cfg: &Config) -> Result<bool, String> {
@@ -576,6 +666,15 @@ fn clip(s: &str, max: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn describes_start_times() {
+        assert_eq!(describe_start("2020-01-01T00:00:00Z").split(" (").next().unwrap(), "2020-01-01 00:00 UTC");
+        assert!(describe_start("2020-01-01T00:00:00Z").contains("started"));
+        assert!(describe_start("2999-01-01T08:00:00Z").contains("(in "));
+        assert!(is_running(&serde_json::json!({"status": "RUNNING"})));
+        assert!(!is_running(&serde_json::json!({"status": "OPEN_REGISTRATION"})));
+    }
 
     #[test]
     fn next_step_after_submit() {

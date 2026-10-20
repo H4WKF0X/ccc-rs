@@ -6,27 +6,30 @@ fishy and help with the browser.
 ## 10 minutes before the start
 
 1. Firefox: log in to codingcontest.org. Leave the contest page open.
-2. Create the contest repo (about 2 s; everything is compiled, nothing compiles later):
+2. Create the contest repo (about 10 s; everything is compiled, nothing compiles later):
 
    ```bash
    cd ~/projects/ccc-rs && ./new-contest.sh ccc-school-2026
    ```
 
-   It ends with a login check. Before the start it says **LOGGED IN as …, but NO CONTEST FOUND**.
-   That's expected. **LOGIN FAILED** here means: log in to codingcontest.org in Firefox again, then
-   `cargo ccc login`.
+   It ends with a login check, which before the start should say
+   **ACCOUNT OK … CONTEST NOT RUNNING: <your contest> … starts … (in N min)**. That confirms your
+   login and your registration. **ACCOUNT LOGIN FAILED**: log in to codingcontest.org in Firefox
+   again, then `cargo ccc login`.
 3. `cd ../ccc-school-2026` and start `claude`, so the session is ready. Don't type `/level` yet.
 
 ## At the start
 
 1. Open the game in the browser (start it on the contest page).
-2. In a terminal in the contest repo: `cargo ccc login`
+2. In a terminal in the contest repo: `cargo ccc login`. This is the real test: can we use the game API?
 
-| It says | Route |
-|---------|-------|
-| `LOGIN OK: <you> @ <contest> … level 1 of N unlocked` | **A: online** |
-| `LOGGED IN …, but NO CONTEST FOUND` | wait a few seconds, `cargo ccc login` again; if it persists, set `contest = "<name>"` in `ccc.toml` (the `<name>` from the browser URL `/contests/<name>/game`) |
-| `LOGIN FAILED: …` | **B: manual** |
+| It says | Do |
+|---------|----|
+| `LOGIN OK: … level 1 of N unlocked` | **Route A: online** |
+| `CONTEST NOT RUNNING … starts …` | not started yet: wait, run it again |
+| `NO CONTEST` | set `contest = "<name>"` in `ccc.toml` (the `<name>` from the browser URL `/contests/<name>/game`), run it again |
+| `ACCOUNT LOGIN FAILED` | log in again in Firefox, run it again; if that doesn't help, **Route B** |
+| `GAME API FAILED` | **Route B: manual**, right away |
 
 ## Route A: online
 
@@ -37,7 +40,7 @@ fishy and help with the browser.
    file, and `/level` goes straight on to the next level.
 4. A sound plays whenever Claude needs you.
 
-## Route B: manual (login doesn't work)
+## Route B: manual (the game API doesn't work for us)
 
 1. `cargo ccc mode manual` (only for you; switch back any time with `cargo ccc mode online`).
 2. In the browser, **download level 1's zip** into Downloads (the default download folder).
@@ -66,7 +69,7 @@ Notes:
 
 | Problem | Fix |
 |---------|-----|
-| `LOGIN FAILED` mid-contest (login expired) | log in again in Firefox, `cargo ccc login`; or `cargo ccc mode manual` |
+| `fetch`/`submit` fail mid-contest | `cargo ccc login`: ACCOUNT LOGIN FAILED → log in again in Firefox; GAME API FAILED → `cargo ccc mode manual` (check in the browser which uploads went through first) |
 | a submit says the outputs aren't current | `cargo ccc all N` (the code changed since the outputs were made) |
 | `guard: could not check …` | carry on (it's a warning); have a human look at the PDF |
 | Claude is stuck or confused | Esc, tell it what you see; `/level N` restarts the loop at level N |
