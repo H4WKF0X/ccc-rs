@@ -7,34 +7,23 @@ Spaceship training run (2026-10-19), sanitised with `tools/sanitize_har.py`.
 
 ## Using it
 
-```toml
-# ccc.toml
-platform = "codingcontest"
-contest = "training-ccc-2025.11-classic-spaceship-23882-ff454653"   # optional, see below
-
-# ccc.local.toml (git-ignored), option A: your portal cookies
-cookie = "…"          # DevTools → Network → any codingcontest.org/api request → Request Headers → Cookie
-```
+Log in to codingcontest.org in Firefox and start the contest or training run. That's all:
 
 ```bash
-cargo ccc progress     # checks the credentials and shows your levels/submissions
-cargo ccc fetch 3      # downloads level 3's zip and ingests it (instead of ingest from Downloads)
-cargo ccc submit 3     # validates, checks freshness, asks "yes", uploads each real output
+cargo ccc login        # who you are, which contest was found, your progress
+cargo ccc fetch 3      # download + ingest level 3
+cargo ccc submit 3     # validate, require current + checked outputs, confirm, upload each output
 ```
 
-- `contest` is the `<name>` in the portal URL `codingcontest.org/contests/<name>/game`. If it is
-  unset, the client uses your one RUNNING registration. Training runs may not appear there, so set it
-  for training.
-- **Option B** if the cookie route fails: copy the game's own credentials from DevTools (any request to
-  `https://<game>.codingcontest.org/api/...`). Set `game_token` (the `Authorization` header value),
-  `game_url` (e.g. `https://spaceship.codingcontest.org`) and `contest_slug` (the `x-ccc-slug`
-  header value).
-- Credentials expire. On HTTP 401/403, copy fresh ones.
+- **Login** is read from Firefox's cookie store on every command (the persistent cookie database
+  plus the session store for session-only cookies), so an expired login is fixed by logging in again
+  in the browser. Alternatives in `~/.config/ccc/config.toml` or `ccc.local.toml`: `cookie = "…"` (the
+  whole Cookie header), or `game_token` + `game_url` + `contest_slug` (from a request to the game).
+- **Contest:** `contest = "<name>"` (from the portal URL `/contests/<name>/game`) if set, else your
+  one running contest registration (a real contest beats a training run), else your active training run.
+- **Network errors** on reads are retried twice. Uploads are never retried (a resend could count as
+  a second, penalised attempt); on a failed upload, check `cargo ccc progress` first.
 - `platform = "manual"` still works: `submit` then just lists the files to upload in the browser.
-
-**Not yet verified live:** the cookie → game-token step (XSRF header). `cargo ccc progress` tests it
-without side effects. Run it once in a training game before Friday. (Confirmed in DevTools:
-`x-ccc-slug` is the contest `slug`, the dashed form like `training-ccc-2025-11-…`.)
 
 ## The API
 

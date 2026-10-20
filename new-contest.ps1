@@ -37,16 +37,16 @@ try {
     git commit -q -m "contest $Name (from ccc-rs template)"
     cargo build --release -q
     if ($LASTEXITCODE -ne 0) { throw "cargo build failed" }
+    Write-Host "Created contest repo: $Dest`n`nChecking the codingcontest.org login and contest:"
+    cargo ccc login
+    $ready = if ($LASTEXITCODE -eq 0) { "Ready." } else {
+        "Not ready yet: fix the login/contest issue above (log in to codingcontest.org in Firefox, start the contest or training there), then run ``cargo ccc login`` again."
+    }
 } finally { Pop-Location }
 
 Write-Host @"
-Created contest repo: $Dest
 
-Next:
-  cd "$Dest"
-  claude                       # start Claude Code here
-  cargo ccc ingest <zip>       # after downloading a level (or no args: newest zip in Downloads)
-  /solve 1                     # in Claude Code
-  cargo ccc all 1              # validate on the example, then write the real outputs
-  cargo ccc submit 1           # manual mode: lists the files to upload in the browser
+$ready Next:
+  cd "$Dest"; claude            # start Claude Code in the contest repo
+  /level                        # plays from the current level: fetch, solve, all, submit (you approve), next
 "@

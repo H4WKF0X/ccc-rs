@@ -14,12 +14,14 @@
 //! Return the output lines without line endings; the harness writes them with the line ending
 //! style of the example `.out` (see [`io::OutputStyle`]).
 
+pub mod cache;
 pub mod checker;
 pub mod config;
 pub mod debug;
 pub mod ingest;
 pub mod io;
 pub mod layout;
+pub mod par;
 pub mod parse;
 pub mod platform;
 pub mod validate;

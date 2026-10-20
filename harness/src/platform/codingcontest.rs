@@ -14,12 +14,20 @@
 //!    - `POST /api/contestant/submit-{L}-{fileId}`    -> multipart field `solution`;
 //!      returns `{evaluation: {isCorrect, cases: [{caseMessage, ...}]}}`
 //!
-//! Credentials come from `ccc.local.toml` (git-ignored): either `cookie` (the whole Cookie header
-//! sent to codingcontest.org) or `game_token` + `game_url` + `contest_slug` copied from a game request.
+//! Credentials, first match wins:
+//! 1. `game_token` + `game_url` + `contest_slug` in the config (copied from a request to the game);
+//! 2. `cookie` in the config (the whole Cookie header sent to codingcontest.org);
+//! 3. otherwise, read straight from Firefox (log in to codingcontest.org there; see firefox.rs).
+//!    Read fresh on every command, so an expired login is fixed by logging in again in the browser.
+//!
+//! The contest is `contest` from the config, else your one running contest registration, else your
+//! active training run.
 
 use std::io::{BufRead, Write};
 use std::path::PathBuf;
 use std::time::Duration;
+
+use super::firefox;
 
 use serde_json::Value;
 
@@ -30,9 +38,8 @@ use crate::layout::{Workspace, file_id, file_name};
 const PORTAL: &str = "https://codingcontest.org";
 const MAX_DOWNLOAD: u64 = 1 << 30;
 
-const MISSING_AUTH: &str = "no codingcontest.org credentials. In ccc.local.toml set either\n  \
-    cookie = \"...\"  (DevTools -> Network -> any codingcontest.org/api request -> Request Headers -> Cookie)\n\
-    or game_token + game_url + contest_slug (from a request to the game, see docs/PLATFORM.md).";
+const LOGIN_HELP: &str = "Log in to codingcontest.org in Firefox, or put cookie = \"...\" in \
+    ~/.config/ccc/config.toml (DevTools -> Network -> any codingcontest.org request -> Request Headers -> Cookie).";
 
 /// An authenticated session with one contest's game app.
 struct Game {
@@ -42,6 +49,10 @@ struct Game {
     slug: String,
     /// Start, server "now" and duration, when we came through the portal (not with game_token).
     clock: Option<Clock>,
+    total_levels: Option<u64>,
+    /// Where the credentials came from, for `login`.
+    auth: String,
+    username: Option<String>,
 }
 
 struct Clock {
@@ -77,15 +88,44 @@ impl Game {
         if let Some(token) = cfg.get("game_token") {
             let base = cfg.get("game_url").ok_or("game_token is set, so game_url must be too")?;
             let slug = cfg.get("contest_slug").ok_or("game_token is set, so contest_slug must be too")?;
-            let base = base.trim_end_matches('/').into();
-            return Ok(Game { agent, base, token: token.into(), slug: slug.into(), clock: None });
+            return Ok(Game {
+                agent,
+                base: base.trim_end_matches('/').into(),
+                token: token.into(),
+                slug: slug.into(),
+                clock: None,
+                total_levels: None,
+                auth: "game_token from config".into(),
+                username: None,
+            });
         }
-        let portal = Portal { agent: &agent, cookie: cfg.get("cookie").ok_or(MISSING_AUTH)? };
+        let (cookie, auth) = match cfg.get("cookie") {
+            Some(cookie) => (cookie.to_owned(), "cookie from config".to_owned()),
+            None => {
+                let (cookie, profile) = firefox::cookie_header("codingcontest.org", "SESSION")
+                    .map_err(|e| format!("not logged in: {e}.\n{LOGIN_HELP}"))?;
+                (cookie, format!("Firefox profile {profile}"))
+            }
+        };
+        let portal = Portal { agent: &agent, cookie: &cookie };
+        let username = portal.get_json("/api/auth/current-user").ok().and_then(|u| u["username"].as_str().map(str::to_owned));
+        if username.is_none() {
+            return Err(format!("codingcontest.org did not accept the login ({auth}); it has probably expired.\n{LOGIN_HELP}"));
+        }
         let contest = portal.find_contest(cfg.get("contest"))?;
         let slug = str_field(&contest, "slug")?;
         let base = str_field(&contest, "gameBaseUrl")?.trim_end_matches('/').to_owned();
         let token = str_field(&portal.post_json("/api/game-token", &serde_json::json!({ "contestSlug": slug }))?, "token")?;
-        Ok(Game { agent, base, token, slug, clock: Clock::from_contest(&contest) })
+        Ok(Game {
+            agent,
+            base,
+            token,
+            slug,
+            clock: Clock::from_contest(&contest),
+            total_levels: contest["totalLevels"].as_u64(),
+            auth,
+            username,
+        })
     }
 
     fn request(&self, method: &str, path: &str) -> String {
@@ -93,12 +133,10 @@ impl Game {
     }
 
     fn get_json(&self, path: &str) -> Result<Value, String> {
-        let resp = self
-            .agent
-            .get(format!("{}{path}", self.base))
-            .header("Authorization", &self.token)
-            .header("x-ccc-slug", &self.slug)
-            .call();
+        let url = format!("{}{path}", self.base);
+        let resp = with_retries(|| {
+            self.agent.get(&url).header("Authorization", &self.token).header("x-ccc-slug", &self.slug).call()
+        });
         json_body(resp, &self.request("GET", path))
     }
 
@@ -109,7 +147,7 @@ impl Game {
     fn level_zip(&self, level: u32) -> Result<Vec<u8>, String> {
         let link = self.get_json(&format!("/api/contestant/level/{level}/files"))?;
         let url = str_field(&link, "url")?;
-        let mut resp = self.agent.get(&url).call().map_err(|e| format!("downloading level {level} zip: {e}"))?;
+        let mut resp = with_retries(|| self.agent.get(&url).call()).map_err(|e| format!("downloading level {level} zip: {e}"))?;
         if !resp.status().is_success() {
             return Err(format!("downloading level {level} zip: HTTP {}", resp.status()));
         }
@@ -131,6 +169,13 @@ impl Game {
             .header("Origin", self.base.as_str())
             .content_type(format!("multipart/form-data; boundary={boundary}"))
             .send(&multipart(&boundary, "solution", name, content)[..]);
+        // Never retried: a resend after a lost response could count as a second (penalised) attempt.
+        if let Err(e) = &resp {
+            return Err(format!(
+                "{}: {e}\n  -> the upload may or may not have arrived; check `cargo ccc progress` before resubmitting",
+                self.request("POST", &path)
+            ));
+        }
         json_body(resp, &self.request("POST", &path))
     }
 }
@@ -150,8 +195,9 @@ impl Portal<'_> {
     }
 
     fn get_json(&self, path: &str) -> Result<Value, String> {
-        let resp = self.agent.get(format!("{PORTAL}{path}")).header("Cookie", self.cookie).call();
-        json_body(resp, &format!("GET {PORTAL}{path}"))
+        let url = format!("{PORTAL}{path}");
+        let resp = with_retries(|| self.agent.get(&url).header("Cookie", self.cookie).call());
+        json_body(resp, &format!("GET {url}"))
     }
 
     fn post_json(&self, path: &str, body: &Value) -> Result<Value, String> {
@@ -167,8 +213,9 @@ impl Portal<'_> {
         json_body(resp, &format!("POST {PORTAL}{path}"))
     }
 
-    /// The contest named in ccc.toml (`contest` = the `<name>` in the portal URL
-    /// `/contests/<name>/game`), or else the one running contest you are registered for.
+    /// The contest to play: `contest` from the config (the `<name>` in the portal URL
+    /// `/contests/<name>/game`), else your one running registration (a real contest beats a
+    /// training run), else your active training run.
     fn find_contest(&self, configured: Option<&str>) -> Result<Value, String> {
         if let Some(name) = configured {
             return self.get_json(&format!("/api/contests/{name}"));
@@ -180,34 +227,73 @@ impl Portal<'_> {
             .flatten()
             .filter(|r| matches!(r["status"].as_str(), Some("RUNNING" | "STATS_FROZEN")))
             .collect();
-        let [reg] = running[..] else {
-            return Err(format!(
-                "{} running contests in your registrations; set contest = \"<name from the portal URL \
-                 /contests/<name>/game>\" in ccc.toml",
-                running.len()
-            ));
-        };
-        // The portal routes by name or slug; try both.
-        ["contestSlug", "contestName"]
-            .iter()
-            .filter_map(|key| reg[*key].as_str())
-            .find_map(|key| self.get_json(&format!("/api/contests/{key}")).ok())
-            .ok_or_else(|| "found a running registration but could not load the contest; set contest in ccc.toml".into())
+        let is_training = |r: &&Value| ["contestSlug", "contestName"].iter().any(|k| r[*k].as_str().is_some_and(|v| v.starts_with("training")));
+        let real: Vec<&Value> = running.iter().copied().filter(|r| !is_training(r)).collect();
+        let preferred = if real.is_empty() { running.clone() } else { real };
+        match preferred[..] {
+            [reg] => return self.load_contest(reg),
+            [] => {}
+            _ => {
+                return Err(format!(
+                    "{} running contests in your registrations; set contest = \"<name from the portal URL \
+                     /contests/<name>/game>\" in ccc.toml",
+                    preferred.len()
+                ));
+            }
+        }
+        match self.get_json("/api/training/active") {
+            Ok(active) if !active.is_null() => self.load_contest(&active),
+            _ => Err("no running contest or active training found. Start one in the browser, or set contest = \
+                      \"<name from the portal URL /contests/<name>/game>\" in ccc.toml"
+                .into()),
+        }
+    }
+
+    /// Load the full contest record behind a registration or training summary. The portal routes
+    /// by name or slug and the summaries name fields differently, so try what's there.
+    fn load_contest(&self, summary: &Value) -> Result<Value, String> {
+        let candidates = [&summary["contestName"], &summary["contestSlug"], &summary["name"], &summary["slug"]]
+            .into_iter()
+            .chain([&summary["contest"]["name"], &summary["contest"]["slug"]])
+            .filter_map(Value::as_str);
+        let mut last_err = String::from("no contest name in the summary");
+        for key in candidates {
+            match self.get_json(&format!("/api/contests/{key}")) {
+                Ok(c) if c["gameBaseUrl"].is_string() => return Ok(c),
+                Ok(_) => last_err = format!("/api/contests/{key} has no gameBaseUrl"),
+                Err(e) => last_err = e,
+            }
+        }
+        Err(format!("could not load the contest ({last_err}); set contest in ccc.toml. Summary: {}", clip(&summary.to_string(), 300)))
     }
 }
 
 // ----------------------------------------------------------------------------- commands
 
-pub fn progress(cfg: &Config) -> Result<bool, String> {
+pub fn login(cfg: &Config) -> Result<bool, String> {
     let game = Game::connect(cfg)?;
+    println!("Logged in as {} ({})", game.username.as_deref().unwrap_or("?"), game.auth);
+    print_progress(&game)
+}
+
+pub fn progress(cfg: &Config) -> Result<bool, String> {
+    print_progress(&Game::connect(cfg)?)
+}
+
+fn current_level(info: &Value) -> Option<u64> {
+    info["score"]["gameScore"]["level"].as_u64()
+}
+
+fn print_progress(game: &Game) -> Result<bool, String> {
     let info = game.progress()?;
     let score = &info["score"]["gameScore"];
+    let total = game.total_levels.map_or(String::new(), |t| format!(" of {t}"));
     println!("Contest {} on {}", game.slug, game.base);
     if let Some(clock) = &game.clock {
         println!("  contest clock: {}", clock.describe());
     }
     // gameScore.timeMs is the score's time component, not a clock: 0 until a level is passed.
-    println!("  current level: {}   score time: {}", score["level"], format_ms(score["timeMs"].as_u64()));
+    println!("  current level: {}{total}   score time: {}", score["level"], format_ms(score["timeMs"].as_u64()));
     if let Some(levels) = info["score"]["state"].as_object() {
         for (level, state) in levels {
             let subs = state["submissions"].as_array().map_or(&[][..], Vec::as_slice);
@@ -278,8 +364,20 @@ pub fn submit(cfg: &Config, level: u32, outputs: &[PathBuf], yes: bool) -> Resul
             }
         }
     }
-    println!("{}", if all_correct { "All submissions correct." } else { "Some submissions were wrong (see above)." });
-    Ok(all_correct)
+    if !all_correct {
+        println!("Some submissions were wrong (see above). Each wrong upload costs penalty time: fix, rerun `all`, then resubmit.");
+        return Ok(false);
+    }
+    println!("All submissions correct.");
+    if let Ok(info) = game.progress() {
+        match (current_level(&info), game.total_levels) {
+            (Some(now), Some(total)) if now as u32 > level && now <= total => println!("Level {now} of {total} is unlocked: next is `cargo ccc fetch {now}`."),
+            (Some(now), _) if now as u32 > level => println!("Level {now} is unlocked: next is `cargo ccc fetch {now}`."),
+            (_, Some(total)) if level as u64 >= total => println!("That was the last level ({total})."),
+            _ => {}
+        }
+    }
+    Ok(true)
 }
 
 // ----------------------------------------------------------------------------- helpers
@@ -293,13 +391,29 @@ fn agent() -> ureq::Agent {
         .into()
 }
 
+/// Retry transport failures (not HTTP errors) twice, with a short backoff. Only for idempotent requests.
+fn with_retries<T>(mut call: impl FnMut() -> Result<T, ureq::Error>) -> Result<T, ureq::Error> {
+    let mut attempt = 0;
+    loop {
+        match call() {
+            Err(e) if attempt < 2 && !matches!(e, ureq::Error::StatusCode(_)) => {
+                attempt += 1;
+                eprintln!("  (network error: {e}; retrying)");
+                std::thread::sleep(Duration::from_millis(500 * attempt));
+            }
+            result => return result,
+        }
+    }
+}
+
 fn json_body(resp: Result<ureq::http::Response<ureq::Body>, ureq::Error>, what: &str) -> Result<Value, String> {
     let mut resp = resp.map_err(|e| format!("{what}: {e}"))?;
     let status = resp.status();
     let text = resp.body_mut().read_to_string().map_err(|e| format!("{what}: reading response: {e}"))?;
     if !status.is_success() {
         let hint = if matches!(status.as_u16(), 401 | 403) {
-            "\n  -> not authorised: the cookie or game token has probably expired; copy a fresh one (docs/PLATFORM.md)"
+            "\n  -> not authorised: the login has probably expired. Log in to codingcontest.org in Firefox again \
+             (or refresh cookie/game_token in the config)."
         } else {
             ""
         };

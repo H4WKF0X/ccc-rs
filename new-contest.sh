@@ -39,14 +39,19 @@ git add -A
 git commit -q -m "contest $name (from ccc-rs template)"
 cargo build --release -q
 
-cat <<MSG
-Created contest repo: $dest
+echo "Created contest repo: $dest"
+echo
+echo "Checking the codingcontest.org login and contest:"
+if cargo ccc login; then
+  ready="Ready."
+else
+  ready="Not ready yet: fix the login/contest issue above (log in to codingcontest.org in Firefox, start the
+contest or training there), then run \`cargo ccc login\` again."
+fi
 
-Next:
-  cd "$dest"
-  claude                       # start Claude Code here
-  cargo ccc ingest <zip>       # after downloading a level (or no args: newest zip in Downloads)
-  /solve 1                     # in Claude Code
-  cargo ccc all 1              # validate on the example, then write the real outputs
-  cargo ccc submit 1           # manual mode: lists the files to upload in the browser
+cat <<MSG
+
+$ready Next:
+  cd "$dest" && claude          # start Claude Code in the contest repo
+  /level                        # plays from the current level: fetch, solve, all, submit (you approve), next
 MSG

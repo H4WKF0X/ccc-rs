@@ -1,24 +1,24 @@
-# Contest settings (committed). Personal secrets go in ccc.local.toml, which is git-ignored.
+# Contest settings (committed). Machine-wide settings (e.g. credentials) go in ~/.config/ccc/config.toml,
+# personal overrides for this repo in ccc.local.toml (git-ignored). Later files win; empty values don't.
 
 # Set by new-contest.sh.
 name = "template"
-
-# The game on codingcontest.org (from https://codingcontest.org/api/games), when known.
 game_slug = ""
 
-# "manual": you download/upload in the browser and `submit` lists the files.
-# "codingcontest": `fetch`, `progress` and `submit` talk to codingcontest.org (see docs/PLATFORM.md).
-platform = "manual"
+# "codingcontest": login/fetch/progress/submit talk to codingcontest.org (login read from Firefox).
+# "manual": you download/upload in the browser and `submit` just lists the files.
+platform = "codingcontest"
 
-# The <name> in the portal URL codingcontest.org/contests/<name>/game. Optional with platform =
-# "codingcontest": if unset, your one RUNNING registration is used.
+# The <name> in the portal URL codingcontest.org/contests/<name>/game. Usually unnecessary: without it
+# the client uses your running contest registration, else your active training run.
 contest = ""
 
-# Output checker for levels with many valid answers (see checker/README.md). Empty = byte-for-byte only.
-# checker = "node checker/sandbox-check.js {sandbox} {input} {output}"
-checker = ""
+# Judge levels with many valid answers by the game's own sandbox checker (checker/README.md). Only
+# applies to levels that ship a sandbox-level-N.html, and only once it accepts the official example
+# answer; if it can't run, you get a warning, never a block. Set to "" to turn it off.
+checker = "node checker/sandbox-check.js {sandbox} {input} {output}"
 
-# Output line endings: "auto" copies the example .out; "crlf" or "lf" force one.
+# Output line endings: "auto" copies the example output; "crlf" or "lf" force one.
 line_ending = "auto"
 
 # Where `cargo ccc ingest` without arguments looks for the newest level zip (default ~/Downloads).

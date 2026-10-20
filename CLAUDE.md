@@ -7,23 +7,28 @@ This repo solves one **Cloudflight Coding Contest** game. A game is a series of 
 difficulty; later levels reuse the input format and data model of earlier ones. The repo was
 created from the `ccc-rs` template; the harness is shared, the solutions are this contest's.
 
-**Your job, when asked to solve a level:** read the statement, infer the rule from the worked
-example, and implement one file, `solution/src/levels/level<N>.rs`, that passes the example
-byte for byte. A human runs validation and submission. You never upload anything.
+**Your job:** for each level, read the statement, infer the rule from the worked example, and
+implement one file, `solution/src/levels/level<N>.rs`, that passes the example. `/level` runs the
+whole loop: fetch, solve, `all`, submit, then the next level. You run `cargo ccc submit`, and the
+human approves each submit. The contest is timed, so keep moving.
 
-## The loop (who does what)
+## The loop
 
-1. Human runs `cargo ccc fetch <N>` (or downloads in the browser + `cargo ccc ingest`). That fills `work/level<N>/`:
+1. `cargo ccc fetch <N>` (or a browser download plus `cargo ccc ingest`) fills `work/level<N>/`:
    - `in/in_level-<N>_0-example.txt` + `in/out_level-<N>_0-example.txt`: the worked example (known answer)
    - `in/in_level-<N>_1-small.txt`, `in/in_level-<N>_2-large.txt`: the real inputs (answers unknown)
    - `statement/level-<N>.pdf`: the problem description. Read this first.
    - `statement/sandbox-level-<N>.html` (some levels): an offline visualiser whose `<script>` is the
      game's checker, so it has the exact rules.
    (Old CatCoder naming `level<N>_0_example.in/.out` also works.)
-2. **You** read the statement and the example pair, then write or extend `level<N>.rs`.
-3. You may run `cargo ccc validate <N>` yourself and iterate until it says GO.
-4. Human runs `cargo ccc all <N>` (validate, then write the real outputs), reviews, then
-   `cargo ccc submit <N>`. Wrong uploads cost penalty minutes.
+2. Read the statement and the example pair, then write or extend `level<N>.rs`.
+3. `cargo ccc validate <N>` until GO.
+4. `cargo ccc all <N>`: the one real run. It solves every real input once (all files in parallel),
+   saves the outputs with a fingerprint of the build, and runs the checker. Outputs from the same
+   build are reused, so never re-run the large input separately (no extra timing or `bench` runs).
+   Any code change makes the outputs stale, and then `all` re-solves.
+5. `cargo ccc submit <N> --yes`, which the human approves. It re-validates and refuses stale or
+   checker-rejected outputs. **Wrong uploads cost penalty time**: only submit what you're confident in.
 
 ## The I/O contract — do not break it
 
@@ -60,6 +65,10 @@ level N-1's code (`--from`) is often right.
 - **Correctness first, then speed.** `_large` inputs can be big and later levels are scored on
   performance: prefer O(n) / O(n log n), and use `i64`/`u64` wherever sums or products can grow.
   Release builds keep overflow checks on, so an overflow panics instead of silently wrapping.
+- **Use the cores.** When cases are independent and slow, `harness::par::map(&cases, solve_case)`
+  solves them on all cores, keeps their order and prints progress on long runs. **Mind memory**: the
+  machine may have only a few GB free, and N cases in flight need N times the per-case peak. For
+  heavy searches use `harness::par::map_threads(k, ...)` with a small `k`.
 - **Deterministic.** No randomness, and never depend on `HashMap` iteration order; use
   `BTreeMap` or sort when order reaches the output.
 - Plain std Rust. No new crates without asking. Clear names over cleverness.
@@ -67,9 +76,9 @@ level N-1's code (`--from`) is often right.
 
 ## Commands
 
-`cargo ccc fetch N` · `cargo ccc ingest [zip|dir|files] [--level N]` · `cargo ccc validate N` · `cargo ccc all N` ·
-`cargo ccc run N <in> [out]` · `cargo ccc bench N` · `cargo ccc new-level N [--from M]` ·
-`cargo ccc status` · `cargo ccc progress` · `cargo ccc submit N` (human only).
+`cargo ccc login` · `cargo ccc progress` · `cargo ccc fetch N` · `cargo ccc ingest [zip|dir|files] [--level N]` ·
+`cargo ccc validate N` · `cargo ccc all N` · `cargo ccc run N <in> [out]` · `cargo ccc bench N` ·
+`cargo ccc new-level N [--from M]` · `cargo ccc status` · `cargo ccc submit N [--yes]` (asks the human).
 
 The platform is codingcontest.org (CatCoder is gone); see `docs/PLATFORM.md`. Output line endings
 are copied from the example (codingcontest.org uses LF).

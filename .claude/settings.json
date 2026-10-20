@@ -1,20 +1,34 @@
 {
   "permissions": {
     "allow": [
+      "Bash(cargo ccc login:*)",
+      "Bash(cargo ccc progress:*)",
+      "Bash(cargo ccc fetch:*)",
+      "Bash(cargo ccc ingest:*)",
       "Bash(cargo ccc validate:*)",
+      "Bash(cargo ccc all:*)",
       "Bash(cargo ccc run:*)",
       "Bash(cargo ccc bench:*)",
       "Bash(cargo ccc status:*)",
-      "Bash(cargo ccc progress:*)",
       "Bash(cargo ccc new-level:*)",
       "Bash(cargo ccc help:*)",
       "Bash(cargo build:*)",
       "Bash(cargo test:*)",
       "Bash(cargo clippy:*)",
-      "Bash(cargo check:*)"
+      "Bash(cargo check:*)",
+      "Bash(cargo fmt:*)",
+      "Bash(node checker/sandbox-check.js:*)"
     ],
-    "deny": [
+    "ask": [
       "Bash(cargo ccc submit:*)"
+    ]
+  },
+  "hooks": {
+    "Notification": [
+      { "hooks": [{ "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/tools/notify.sh" }] }
+    ],
+    "Stop": [
+      { "hooks": [{ "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/tools/notify.sh" }] }
     ]
   }
 }

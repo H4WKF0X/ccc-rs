@@ -1,14 +1,14 @@
-# Copy to ccc.local.toml (git-ignored) for personal settings. Any key from ccc.toml can go here.
+# Personal settings. Any key from ccc.toml can go here. Two places:
+#   ~/.config/ccc/config.toml   every contest repo on this machine (Windows: %APPDATA%\ccc\config.toml)
+#   ccc.local.toml              this repo only (git-ignored)
 #
-# downloads_dir = "/home/me/Downloads"
+# Login: nothing to do if you're logged in to codingcontest.org in Firefox (it's read from there on
+# every command). Otherwise, one of:
 #
-# codingcontest.org credentials (platform = "codingcontest"; see docs/PLATFORM.md). They expire.
+# cookie = "PASTE_COOKIE_HEADER"      # DevTools -> Network -> any codingcontest.org request -> Cookie
 #
-# Option A: the portal cookies. DevTools -> Network -> any codingcontest.org/api request ->
-# Request Headers -> Cookie (copy the whole value).
-# cookie = "PASTE_COOKIE_HEADER"
-#
-# Option B: the game's own credentials, from any request to https://<game>.codingcontest.org/api/...
-# game_token = "PASTE_AUTHORIZATION_HEADER"
+# game_token = "PASTE_AUTHORIZATION_HEADER"   # from a request to https://<game>.codingcontest.org/api/...
 # game_url = "https://spaceship.codingcontest.org"
 # contest_slug = "PASTE_X_CCC_SLUG_HEADER"
+#
+# downloads_dir = "/home/me/Downloads"

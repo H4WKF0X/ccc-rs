@@ -28,5 +28,7 @@ Solve level **$ARGUMENTS** of this contest.
    `checker/README.md`) plus `checker = ...` in `ccc.toml`. Then `validate` reports "GO (checker)". Then reason about edge cases from the statement that the example doesn't
    cover (empty records, zeros/negatives, ties, off-by-one, overflow).
 
-Do not run `cargo ccc submit` and do not edit `harness/`. When it's GO, tell me to run
-`cargo ccc all $ARGUMENTS`, and report `cargo ccc bench $ARGUMENTS` timings if the inputs are large.
+When it's GO, run `cargo ccc all $ARGUMENTS`: it solves every real input once (in parallel), saves
+the outputs (reused later, so no need to run them again) and runs the checker. Don't do separate
+timing runs of the large input; `all` reports the times. Use `harness::par::map` for slow independent
+cases. Do not run `cargo ccc submit` (use `/level` for the full loop) and do not edit `harness/`.

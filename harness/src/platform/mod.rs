@@ -1,12 +1,13 @@
 //! Getting levels from and outputs to the contest platform. Picked by `platform = "..."` in `ccc.toml`.
 //!
-//! - `manual` (default): you download/upload in the browser; `submit` lists what to upload.
-//! - `codingcontest`: talks to codingcontest.org directly (`fetch`, `progress`, `submit`).
+//! - `codingcontest` (default): talks to codingcontest.org directly (`login`, `fetch`, `progress`, `submit`).
+//! - `manual`: you download/upload in the browser; `submit` lists what to upload.
 //!
 //! The harness has already re-validated the example and checked the outputs are fresh before
 //! calling `submit`.
 
 mod codingcontest;
+mod firefox;
 mod manual;
 
 use std::path::PathBuf;
@@ -15,7 +16,7 @@ use crate::config::Config;
 use crate::layout::Workspace;
 
 fn platform(cfg: &Config) -> Result<&str, String> {
-    match cfg.get("platform").unwrap_or("manual") {
+    match cfg.get("platform").unwrap_or("codingcontest") {
         p @ ("manual" | "codingcontest") => Ok(p),
         other => Err(format!("unknown platform {other:?} in ccc.toml (use \"manual\" or \"codingcontest\")")),
     }
@@ -39,6 +40,12 @@ pub fn submit(ws: &Workspace, cfg: &Config, level: u32, outputs: &[PathBuf], yes
 pub fn fetch(ws: &Workspace, cfg: &Config, level: u32) -> Result<bool, String> {
     needs_client(cfg, "fetch")?;
     codingcontest::fetch(ws, cfg, level)
+}
+
+/// Check the login and show who you are, which contest was found, and your progress.
+pub fn login(cfg: &Config) -> Result<bool, String> {
+    needs_client(cfg, "login")?;
+    codingcontest::login(cfg)
 }
 
 /// Show the team's progress as the platform sees it (also a cheap check that auth works).

@@ -1,11 +1,16 @@
-//! Contest settings from `ccc.toml` (committed), overridden by `ccc.local.toml` (git-ignored).
+//! Settings, later files overriding earlier ones (empty values never override):
+//!
+//! 1. `~/.config/ccc/config.toml` (Windows: `%APPDATA%\ccc\config.toml`): per machine, for every
+//!    contest repo, e.g. credentials.
+//! 2. `ccc.toml`: the contest's settings (committed).
+//! 3. `ccc.local.toml`: personal overrides for this repo (git-ignored).
 //!
 //! The format is a flat subset of TOML (`key = "value"` lines and `#` comments), which keeps the
 //! harness free of a TOML dependency. Section headers are ignored.
 
 use std::collections::BTreeMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Default)]
 pub struct Config {
@@ -15,11 +20,11 @@ pub struct Config {
 impl Config {
     pub fn load(root: &Path) -> Result<Config, String> {
         let mut values = BTreeMap::new();
-        for name in ["ccc.toml", "ccc.local.toml"] {
-            let path = root.join(name);
+        let files = global_path().into_iter().chain([root.join("ccc.toml"), root.join("ccc.local.toml")]);
+        for path in files {
             if let Ok(text) = fs::read_to_string(&path) {
                 let parsed = parse(&text).map_err(|e| format!("{}: {e}", path.display()))?;
-                values.extend(parsed);
+                values.extend(parsed.into_iter().filter(|(_, v)| !v.is_empty()));
             }
         }
         Ok(Config { values })
@@ -28,6 +33,17 @@ impl Config {
     pub fn get(&self, key: &str) -> Option<&str> {
         self.values.get(key).map(String::as_str).filter(|v| !v.is_empty())
     }
+}
+
+/// The per-machine config file (it may not exist).
+pub fn global_path() -> Option<PathBuf> {
+    let env = |k: &str| std::env::var_os(k).filter(|v| !v.is_empty()).map(PathBuf::from);
+    let dir = if cfg!(windows) {
+        env("APPDATA")?
+    } else {
+        env("XDG_CONFIG_HOME").or_else(|| env("HOME").map(|h| h.join(".config")))?
+    };
+    Some(dir.join("ccc").join("config.toml"))
 }
 
 fn parse(text: &str) -> Result<BTreeMap<String, String>, String> {
