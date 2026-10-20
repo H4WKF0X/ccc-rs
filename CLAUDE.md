@@ -41,12 +41,34 @@ pub fn solve(input: &str) -> Vec<String>
 - The first line is usually a count `N`, then `N` records. Confirm against the statement.
 - **Match the example's output format exactly**: same numbers per line, same separators, blank
   lines where the example has them. If `validate` says NO-GO, the format or logic is wrong, not
-  the harness. **Exception:** levels that accept many valid answers (usually sandbox levels). There the
-  game's checker decides (`checker` in `ccc.toml`, `checker/README.md`). Don't distort a valid
-  solution to copy the example's arbitrary choices.
+  the harness. **Exception:** levels that accept many valid answers. There a checker decides
+  (see "Levels with many valid answers" below). Don't distort a valid solution to copy the
+  example's arbitrary choices.
 - Levels are registered automatically from file names (`solution/build.rs`). Adding a level means
   adding one file. `cargo ccc new-level <N> [--from <M>]` scaffolds it.
 - Do **not** edit `harness/` to make a level work. If the harness is truly wrong, say so.
+
+## Levels with many valid answers
+
+If the statement allows several correct outputs (paths, layouts, schedules, ...), add a checker to
+the level file, next to `solve`:
+
+```rust
+pub fn check(input: &str, output: &[String]) -> Result<(), String>
+```
+
+- Encode the statement's **validity rules**: format, constraints, limits. If the level ships a
+  `sandbox-level-N.html`, read its `<script>` for the exact rules. Most games' sandboxes only
+  visualise, but some validate.
+- Write it **independently of `solve`**: don't call the solver's functions, or it proves nothing.
+  Shared rules go in `model.rs` so later levels reuse them (level 6 = level 5's rules + what changed).
+- Return `Err` naming the case and the reason. It's registered automatically, and it must accept the
+  official example answer, or it's ignored with a warning (a real signal that your rules are wrong).
+- Then `validate` says "GO (checker)", `all` checks every output, and `submit` refuses rejected ones.
+  It runs in-process and is cached per build, so it's cheap. Don't write checkers in other
+  languages or edit the `checker` setting in `ccc.toml`.
+- `ccc.toml`'s `checker` additionally runs the game's own sandbox code when that sandbox validates
+  (Spaceship-style). It's self-tested too, and ignored when it doesn't fit.
 
 ## Reusing earlier levels (this matters a lot)
 

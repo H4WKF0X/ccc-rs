@@ -19,3 +19,12 @@ fn solve_one(t: &mut Tokens) -> String {
     let _ = t;
     todo!("level {{N}}: read one record and return its output line")
 }
+
+// Only if this level accepts several valid answers: uncomment and write the statement's validity
+// rules here, independently of `solve` (shared rules go in model.rs). The harness picks it up
+// automatically, requires it to accept the official example answer, then uses it in validate, all
+// and submit. Return Err with the case and reason, e.g. "case 3: path leaves the lawn at step 17".
+//
+// pub fn check(input: &str, output: &[String]) -> Result<(), String> {
+//     todo!("level {{N}}: validity rules")
+// }

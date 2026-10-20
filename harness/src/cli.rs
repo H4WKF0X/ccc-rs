@@ -7,7 +7,7 @@ use std::process::ExitCode;
 use std::time::Instant;
 
 use crate::cache::{self, Record};
-use crate::checker::{self, Checker};
+use crate::checker::{self, Judges};
 use crate::config::Config;
 use crate::io::{self, OutputStyle};
 use crate::layout::{Workspace, file_name, is_example};
@@ -103,24 +103,21 @@ impl Ctx<'_> {
         }
     }
 
-    /// The checker for level `n`, if one is configured, applies to this level and accepts the
-    /// official example answer. A checker failing that self-test is ignored with a warning.
-    fn checker(&self, n: u32) -> Option<Checker> {
-        let checker = Checker::for_level(&self.ws, &self.cfg, n)?;
-        match checker.self_test(&self.ws, n) {
-            Ok(()) => Some(checker),
-            Err(why) => {
-                println!("  warning: ignoring the checker for level {n}: {why}");
-                println!("           It needs adapting to this game (checker/README.md).");
-                None
-            }
+    /// The usable checkers for level `n`: its own `check` and/or the configured external one, each
+    /// only if it accepts the official example answer (otherwise it is ignored with a warning).
+    fn judges(&self, n: u32) -> Option<Judges> {
+        let check = self.levels.iter().find(|l| l.n == n).and_then(|l| l.check);
+        let (judges, warnings) = Judges::for_level(&self.ws, &self.cfg, n, check);
+        for warning in warnings {
+            println!("  warning: {warning}");
         }
+        (!judges.is_empty()).then_some(judges)
     }
 
     fn validate(&self, n: u32) -> Result<bool, String> {
         let solve = self.solver(n)?;
         let style = self.style(n)?;
-        let mut checker: Option<Option<Checker>> = None; // looked up only if needed
+        let mut judges: Option<Option<Judges>> = None; // looked up only if needed
         let mut checked = 0;
         let mut all_go = true;
         for example in self.ws.examples(n)? {
@@ -147,14 +144,14 @@ impl Ctx<'_> {
                     style.describe()
                 ),
                 // Many valid answers: the game's checker, not the example, decides.
-                Verdict::NoGo(detail) => match checker.get_or_insert_with(|| self.checker(n)) {
-                    Some(checker) => {
+                Verdict::NoGo(detail) => match judges.get_or_insert_with(|| self.judges(n)) {
+                    Some(judges) => {
                         let out = self.ws.level_dir(n).join("check").join(file_name(&expected_path));
                         io::write_lines(&out, &produced, style)?;
-                        match checker.check(&self.ws.root, &example.input, &out) {
+                        match judges.judge(&self.ws.root, &example.input, &out) {
                             checker::Verdict::Accepted => println!(
                                 "GO (checker) — level {n}, {name}: differs from the example, but {} accepts it.",
-                                checker.describe()
+                                judges.describe()
                             ),
                             checker::Verdict::Rejected(why) => {
                                 println!("NO-GO — level {n}, {name}: the checker rejects it: {why}\n{detail}");
@@ -168,12 +165,11 @@ impl Ctx<'_> {
                     }
                     None => {
                         println!("NO-GO — level {n} does not match {name}.\n{detail}");
-                        if checker::sandbox_file(&self.ws, n).is_some() && self.cfg.get("checker").is_none() {
-                            println!(
-                                "    This level ships a sandbox checker. If it accepts several valid answers, set\n    \
-                                 `checker` in ccc.toml so the game's checker decides (checker/README.md)."
-                            );
-                        }
+                        println!(
+                            "    If level {n} accepts several valid answers, add to level{n}.rs\n    \
+                             `pub fn check(input: &str, output: &[String]) -> Result<(), String>` (the statement's\n    \
+                             validity rules, independent of solve; it must accept the official example answer)."
+                        );
                         all_go = false;
                     }
                 },
@@ -250,7 +246,7 @@ impl Ctx<'_> {
         }
 
         // Check every output the checker hasn't already accepted, all at once.
-        let checker = self.checker(n);
+        let checker = self.judges(n);
         let verdicts: Vec<Option<String>> = match &checker {
             None => vec![None; jobs.len()],
             Some(checker) => std::thread::scope(|s| {
@@ -259,7 +255,7 @@ impl Ctx<'_> {
                     .zip(&records)
                     .map(|((input, out, _), record)| {
                         let pending = record.as_ref().is_some_and(|r| !r.checker_ok());
-                        s.spawn(move || pending.then(|| verdict_text(checker.check(&self.ws.root, input, out))))
+                        s.spawn(move || pending.then(|| verdict_text(checker.judge(&self.ws.root, input, out))))
                     })
                     .collect();
                 handles.into_iter().map(|h| h.join().expect("checker thread")).collect()
@@ -392,7 +388,7 @@ impl Ctx<'_> {
             println!("Refusing to submit: the example does not pass.");
             return Ok(false);
         }
-        let checker = self.checker(n);
+        let checker = self.judges(n);
         let mut outputs = Vec::new();
         for input in self.ws.real_inputs(n)? {
             let out = self.ws.output_for(n, &input);
@@ -406,7 +402,7 @@ impl Ctx<'_> {
             if let Some(checker) = &checker
                 && !record.checker_ok()
             {
-                record.checker = verdict_text(checker.check(&self.ws.root, &input, &out));
+                record.checker = verdict_text(checker.judge(&self.ws.root, &input, &out));
                 cache::save(&out, &record)?;
             }
             if checker.is_some() {

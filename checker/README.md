@@ -1,6 +1,11 @@
 # checker/
 
-Optional output checker for levels that accept **many valid answers**. A byte-for-byte match with the
+**Most levels need nothing here.** For levels with many valid answers, the normal checker is the
+level's own `pub fn check` in Rust (see CLAUDE.md, "Levels with many valid answers"). This folder
+is only for running the **game's own sandbox code** as an additional checker, for games whose
+`sandbox-level-N.html` actually validates (Spaceship did; many games' sandboxes only visualise).
+
+External output checker for levels that accept **many valid answers**. A byte-for-byte match with the
 example's answer can't work there, so the game's own checker decides instead. Enable it in `ccc.toml`:
 
 ```toml

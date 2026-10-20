@@ -11,15 +11,18 @@ For each level N:
 
 1. **Fetch:** `cargo ccc fetch N`, unless `work/levelN/` already exists.
 2. **Understand:** read `work/levelN/statement/level-N.pdf`, plus the `<script>` of
-   `sandbox-level-N.html` if there is one (the game's own checker, with the exact rules). Read the
+   `sandbox-level-N.html` if there is one (the game's visualiser, sometimes with its exact rules). Read the
    example pair `in/in_level-N_0-example.txt` / `in/out_level-N_0-example.txt`, and note the size of
    the large input. If level N-1 exists, look at what changed and reuse its code and `model.rs`
    (`cargo ccc new-level N --from N-1` when starting from the previous level makes sense).
 3. **Implement** `solution/src/levels/levelN.rs` following CLAUDE.md. If the cases are independent
    and the large input will take more than a few seconds, solve them with `harness::par::map` (mind
    the memory per case). For long searches, a `harness::par::Progress` keeps progress visible.
-4. **Validate:** `cargo ccc validate N` until GO (or "GO (checker)" for levels with many valid
-   answers). On NO-GO, fix from the first difference. Don't distort a valid answer to copy the example.
+4. **Validate:** `cargo ccc validate N` until GO. On NO-GO, fix from the first difference. If the
+   level accepts **several valid answers**, don't distort yours to copy the example. Add
+   `pub fn check` to the level file instead ("Levels with many valid answers" in CLAUDE.md), then
+   expect "GO (checker)". Better still, write `check` first whenever the statement allows several
+   answers.
 5. **Produce:** `cargo ccc all N`. This is the one real run: it solves every input once (in
    parallel), saves the outputs and runs the checker. Don't do separate timing or `bench` runs of
    the large input; `all` reports the time per file, and its outputs are reused later. If it fails,

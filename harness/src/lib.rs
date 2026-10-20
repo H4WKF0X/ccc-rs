@@ -4,10 +4,12 @@
 //! only place solving happens. `harness` (this crate) owns the I/O contract, ingesting downloaded
 //! levels, validating against the worked example, producing outputs and the platform client.
 //!
-//! The contract a level implements is one function:
+//! The contract a level implements is one function, plus an optional checker for levels that
+//! accept many valid answers:
 //!
 //! ```ignore
 //! pub fn solve(input: &str) -> Vec<String>
+//! pub fn check(input: &str, output: &[String]) -> Result<(), String>   // optional
 //! ```
 //!
 //! `input` is the whole input file with line endings normalised to `\n` and no trailing newline.
@@ -31,12 +33,17 @@ mod cli;
 /// The signature every level's `solve` has.
 pub type SolveFn = fn(&str) -> Vec<String>;
 
+/// A level's own output checker: `Err` says why `output` is not a valid answer for `input`.
+pub type CheckFn = fn(&str, &[String]) -> Result<(), String>;
+
 /// One registered level. The `solution` crate's build script generates the list of these from
 /// the files in `solution/src/levels/`, so adding a level means adding one file.
 #[derive(Clone, Copy)]
 pub struct Level {
     pub n: u32,
     pub solve: SolveFn,
+    /// Set when the level file defines `pub fn check`.
+    pub check: Option<CheckFn>,
 }
 
 /// Entry point for the `solution` binary: `fn main() -> ExitCode { harness::main(LEVELS) }`.

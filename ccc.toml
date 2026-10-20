@@ -13,9 +13,10 @@ platform = "codingcontest"
 # the client uses your running contest registration, else your active training run.
 contest = ""
 
-# Judge levels with many valid answers by the game's own sandbox checker (checker/README.md). Only
-# applies to levels that ship a sandbox-level-N.html, and only once it accepts the official example
-# answer; if it can't run, you get a warning, never a block. Set to "" to turn it off.
+# Levels with many valid answers are judged by the level's own `pub fn check` (see CLAUDE.md) and,
+# where it fits, by this external command running the game's own sandbox code (checker/README.md).
+# It only applies to levels that ship a sandbox-level-N.html, only once it accepts the official
+# example answer, and if it can't run you get a warning, never a block. "" turns it off.
 checker = "node checker/sandbox-check.js {sandbox} {input} {output}"
 
 # Output line endings: "auto" copies the example output; "crlf" or "lf" force one.
