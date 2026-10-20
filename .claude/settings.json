@@ -24,7 +24,8 @@
       "Bash(cargo ccc submit:*)"
     ],
     "deny": [
-      "Read(./work/*/quarantine/**)"
+      "Read(./work/*/quarantine/**)",
+      "Bash(cargo ccc guard-html:*)"
     ]
   },
   "hooks": {

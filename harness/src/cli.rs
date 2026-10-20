@@ -22,6 +22,7 @@ cargo ccc — Cloudflight Coding Contest pipeline
   fetch N                        download level N from codingcontest.org and ingest it
   ingest [paths..] [--level N]   unpack a download (zip/dir/files; default: newest zip in Downloads)
   guard N                        check level N's statement PDF for hidden (prompt-injection) text; fetch/ingest do this
+  guard-html N                   (humans only) check level N's sandbox HTML for text aimed at an AI; prints findings
   validate N                     run level N on the example(s), compare to the expected output
   all N                          validate, then solve every real input (in parallel) and check the outputs;
                                  outputs already made by this exact build are reused
@@ -63,6 +64,7 @@ fn dispatch(levels: &[Level], args: &[String]) -> Result<bool, String> {
         "fetch" => platform::fetch(&ctx.ws, &ctx.cfg, level_arg(rest)?),
         "progress" => platform::progress(&ctx.cfg),
         "login" => platform::login(&ctx.cfg),
+        "guard-html" => crate::guard::html(&ctx.ws, &ctx.cfg, level_arg(rest)?),
         "guard" => {
             crate::guard::run(&ctx.ws, &ctx.cfg, level_arg(rest)?);
             Ok(true)

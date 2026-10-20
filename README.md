@@ -37,7 +37,11 @@ cargo ccc submit 3               # re-validate, require current + checked output
 ```
 
 Other commands: `progress`, `ingest <zip|dir|files> [--level N]`, `run N <in> [out]`, `bench N`,
-`new-level N [--from M]`, `status`. `cargo ccc` is a cargo alias, so it works the same everywhere.
+`new-level N [--from M]`, `status`, `guard N` (re-run the PDF check).
+
+**For humans only:** `cargo ccc guard-html N` checks a level's sandbox HTML for text aimed at an AI
+(Claude reads its source; you only see it run). It prints what it finds and offers to quarantine the
+file. Claude is blocked from running it, because its output contains the untrusted text. `cargo ccc` is a cargo alias, so it works the same everywhere.
 
 ## Layout
 
