@@ -17,7 +17,7 @@
       "Bash(cargo clippy:*)",
       "Bash(cargo check:*)",
       "Bash(cargo fmt:*)",
-      "Bash(node checker/sandbox-check.js:*)",
+      "Bash(sh checker/node-safe.sh:*)",
       "Bash(cargo ccc guard:*)"
     ],
     "ask": [

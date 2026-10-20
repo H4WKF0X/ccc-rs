@@ -9,8 +9,14 @@ External output checker for levels that accept **many valid answers**. A byte-fo
 example's answer can't work there, so the game's own checker decides instead. Enable it in `ccc.toml`:
 
 ```toml
-checker = "node checker/sandbox-check.js {sandbox} {input} {output}"
+checker = "sh checker/node-safe.sh checker/sandbox-check.js {sandbox} {input} {output}"
 ```
+
+**Always through `node-safe.sh`.** The sandbox HTML comes from the level zip, so its JavaScript is
+untrusted. Under plain `node` it could read your files (e.g. `~/.ssh`), write files, start
+processes or use the network. `node-safe.sh` runs node with its permission model, so the script
+can only *read* `checker/` and `work/`; everything else is blocked. Use it for every script that
+loads sandbox code, including one-off oracles.
 
 **Contract:** the command runs from the repo root with absolute paths substituted:
 - `{sandbox}`: `work/level<N>/statement/sandbox-level-<N>.html`. Levels without one are not checked.

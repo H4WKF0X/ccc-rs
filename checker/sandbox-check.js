@@ -1,7 +1,8 @@
 // Runs a level's sandbox checker (the inline <script> of sandbox-level-N.html) headlessly under node,
 // on every case of one input/output file pair. Contract: checker/README.md.
 //
-// usage: node checker/sandbox-check.js <sandbox.html> <input.txt> <output.txt>
+// usage: sh checker/node-safe.sh checker/sandbox-check.js <sandbox.html> <input.txt> <output.txt>
+//        (never plain `node`: the sandbox code is untrusted; node-safe.sh only lets it read checker/ and work/)
 // exit:  0 = every case SUCCESS, 1 = an output is rejected, 2 = this checker can't judge (usage/IO
 //        errors, the sandbox script doesn't run, or the files don't fit splitCases below).
 //

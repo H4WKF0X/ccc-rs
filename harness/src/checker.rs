@@ -86,10 +86,17 @@ impl Checker {
         }
     }
 
+    /// The checker script's name (e.g. `sandbox-check.js`), not the wrapper running it.
     pub fn describe(&self) -> String {
+        let script = self
+            .argv
+            .iter()
+            .find(|a| [".js", ".py", ".rb", ".pl"].iter().any(|ext| a.ends_with(ext)))
+            .map(|a| file_name(Path::new(a)))
+            .unwrap_or_else(|| self.argv[..2.min(self.argv.len())].join(" "));
         match &self.sandbox {
-            Some(s) => format!("{} with {}", self.argv[..2.min(self.argv.len())].join(" "), file_name(s)),
-            None => self.argv[..2.min(self.argv.len())].join(" "),
+            Some(s) => format!("{script} with {}", file_name(s)),
+            None => script,
         }
     }
 }

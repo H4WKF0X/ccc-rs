@@ -21,7 +21,8 @@ contest = ""
 # where it fits, by this external command running the game's own sandbox code (checker/README.md).
 # It only applies to levels that ship a sandbox-level-N.html, only once it accepts the official
 # example answer, and if it can't run you get a warning, never a block. "" turns it off.
-checker = "node checker/sandbox-check.js {sandbox} {input} {output}"
+# Runs locked down (checker/node-safe.sh): the sandbox code may only read checker/ and work/.
+checker = "sh checker/node-safe.sh checker/sandbox-check.js {sandbox} {input} {output}"
 
 # Prompt-injection guard: after each fetch/ingest, compare the statement PDF's pages (what a human sees)
 # with its text layer (what an AI reads), using a locked-down headless Claude session (~5 s per level).
