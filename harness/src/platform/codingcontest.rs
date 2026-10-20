@@ -140,12 +140,24 @@ impl Game {
         json_body(resp, &self.request("GET", path))
     }
 
+    /// How many levels the game has: from the contest record, else from the game app itself
+    /// (`/game/game-info` -> `levelsInfo.count`). `None` if neither says.
+    fn levels(&self) -> Option<u64> {
+        self.total_levels.or_else(|| self.get_json("/game/game-info").ok()?["levelsInfo"]["count"].as_u64())
+    }
+
     fn progress(&self) -> Result<Value, String> {
         self.get_json("/api/contestant/contestant-info")
     }
 
     fn level_zip(&self, level: u32) -> Result<Vec<u8>, String> {
-        let link = self.get_json(&format!("/api/contestant/level/{level}/files"))?;
+        let link = self.get_json(&format!("/api/contestant/level/{level}/files")).map_err(|e| {
+            if e.contains("HTTP 404") {
+                format!("level {level} is not available: past the game's last level, or not unlocked yet ({e})")
+            } else {
+                e
+            }
+        })?;
         let url = str_field(&link, "url")?;
         let mut resp = with_retries(|| self.agent.get(&url).call()).map_err(|e| format!("downloading level {level} zip: {e}"))?;
         if !resp.status().is_success() {
@@ -294,7 +306,8 @@ fn current_level(info: &Value) -> Option<u64> {
 fn print_progress(game: &Game) -> Result<bool, String> {
     let info = game.progress()?;
     let score = &info["score"]["gameScore"];
-    let total = game.total_levels.map_or(String::new(), |t| format!(" of {t}"));
+    let levels = game.levels();
+    let total = levels.map_or(String::new(), |t| format!(" of {t}"));
     println!("Contest {} on {}", game.slug, game.base);
     if let Some(clock) = &game.clock {
         println!("  contest clock: {}", clock.describe());
@@ -320,6 +333,11 @@ fn print_progress(game: &Game) -> Result<bool, String> {
 
 pub fn fetch(ws: &Workspace, cfg: &Config, level: u32) -> Result<bool, String> {
     let game = Game::connect(cfg)?;
+    if let Some(total) = game.levels()
+        && u64::from(level) > total
+    {
+        return Err(format!("this game has only {total} levels, so there is no level {level}"));
+    }
     let bytes = game.level_zip(level)?;
     println!("Downloaded level {level} ({} KB) from {}", bytes.len() / 1024, game.base);
     let mut files = Vec::new();
@@ -376,15 +394,26 @@ pub fn submit(cfg: &Config, level: u32, outputs: &[PathBuf], yes: bool) -> Resul
         return Ok(false);
     }
     println!("All submissions correct.");
-    if let Ok(info) = game.progress() {
-        match (current_level(&info), game.total_levels) {
-            (Some(now), Some(total)) if now as u32 > level && now <= total => println!("Level {now} of {total} is unlocked: next is `cargo ccc fetch {now}`."),
-            (Some(now), _) if now as u32 > level => println!("Level {now} is unlocked: next is `cargo ccc fetch {now}`."),
-            (_, Some(total)) if level as u64 >= total => println!("That was the last level ({total})."),
-            _ => {}
-        }
+    let now = game.progress().ok().as_ref().and_then(current_level);
+    if let Some(next) = next_step(level, game.levels(), now) {
+        println!("{next}");
     }
     Ok(true)
+}
+
+/// What to say after level `level` was passed, given the game's level count and the level the game
+/// now reports as current. After the last level the game reports one past the end, so the end is
+/// checked first.
+fn next_step(level: u32, total: Option<u64>, now: Option<u64>) -> Option<String> {
+    let level = u64::from(level);
+    match (total, now) {
+        (Some(total), _) if level >= total => Some(format!("That was the last level ({level} of {total}): the game is complete.")),
+        (Some(total), Some(now)) if now > level => Some(format!("Level {now} of {total} is unlocked: next is `cargo ccc fetch {now}`.")),
+        (None, Some(now)) if now > level => Some(format!(
+            "The game now reports level {now} (couldn't tell how many levels it has; `fetch {now}` fails if that was the last)."
+        )),
+        _ => None,
+    }
 }
 
 // ----------------------------------------------------------------------------- helpers
@@ -496,6 +525,15 @@ fn clip(s: &str, max: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn next_step_after_submit() {
+        // The bug: after the last level the game reports one past the end.
+        assert_eq!(next_step(5, Some(5), Some(6)).unwrap(), "That was the last level (5 of 5): the game is complete.");
+        assert!(next_step(4, Some(5), Some(5)).unwrap().starts_with("Level 5 of 5 is unlocked"));
+        assert!(next_step(4, None, Some(5)).unwrap().contains("couldn't tell"));
+        assert_eq!(next_step(4, Some(5), Some(4)), None);
+    }
 
     #[test]
     fn multipart_body_shape() {

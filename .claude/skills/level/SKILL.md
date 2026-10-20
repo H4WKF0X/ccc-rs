@@ -32,6 +32,7 @@ For each level N:
    - All `[CORRECT]`: go straight on to level N+1 (step 1). Don't stop to summarise.
    - Any `[WRONG]`: read the per-line messages, find the misunderstanding, fix, rerun `all`, and only
      resubmit once you know why it was wrong. If you can't tell, stop and explain to the human.
-7. Stop when `submit` reports the last level, or when the human interrupts.
+7. Stop when `submit` says the game is complete (or `fetch` says there is no such level), or when the
+   human interrupts.
 
 Never edit `harness/`. If the harness is in the way, stop and say so.
