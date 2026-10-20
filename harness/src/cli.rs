@@ -17,7 +17,8 @@ use crate::{Level, SolveFn, ingest, par, platform};
 const HELP: &str = "\
 cargo ccc — Cloudflight Coding Contest pipeline
 
-  login                          check the codingcontest.org login (read from Firefox) and the contest
+  login                          LOGIN OK / LOGIN FAILED: the codingcontest.org login (from Firefox) and the contest
+  mode [online|manual]           show/switch the mode for you; manual = zips and uploads via ~/Downloads
   progress                       your progress on codingcontest.org
   fetch N                        download level N from codingcontest.org and ingest it
   ingest [paths..] [--level N]   unpack a download (zip/dir/files; default: newest zip in Downloads)
@@ -64,6 +65,7 @@ fn dispatch(levels: &[Level], args: &[String]) -> Result<bool, String> {
         "fetch" => platform::fetch(&ctx.ws, &ctx.cfg, level_arg(rest)?),
         "progress" => platform::progress(&ctx.cfg),
         "login" => platform::login(&ctx.cfg),
+        "mode" => platform::mode(&ctx.ws, &ctx.cfg, rest.first().map(String::as_str)),
         "guard-html" => crate::guard::html(&ctx.ws, &ctx.cfg, level_arg(rest)?),
         "guard" => {
             crate::guard::run(&ctx.ws, &ctx.cfg, level_arg(rest)?);
@@ -369,11 +371,10 @@ impl Ctx<'_> {
     }
 
     fn status(&self) -> Result<bool, String> {
-        println!(
-            "Contest: {}   platform: {}",
-            self.cfg.get("name").unwrap_or("(unnamed)"),
-            self.cfg.get("platform").unwrap_or("codingcontest")
-        );
+        println!("Contest: {}   mode: {}", self.cfg.get("name").unwrap_or("(unnamed)"), self.cfg.mode());
+        if self.cfg.mode() == "manual" {
+            println!("Next level (manual mode): {}", platform::next_manual_level(&self.ws));
+        }
         let solved: Vec<String> = self.levels.iter().map(|l| l.n.to_string()).collect();
         println!("Solvers compiled in: [{}]", solved.join(", "));
         for n in self.ws.ingested_levels() {

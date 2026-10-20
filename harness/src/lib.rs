@@ -20,6 +20,7 @@ pub mod cache;
 pub mod checker;
 pub mod config;
 pub mod debug;
+pub mod downloads;
 pub mod guard;
 pub mod ingest;
 pub mod io;
@@ -49,5 +50,23 @@ pub struct Level {
 
 /// Entry point for the `solution` binary: `fn main() -> ExitCode { harness::main(LEVELS) }`.
 pub fn main(levels: &[Level]) -> std::process::ExitCode {
+    quiet_on_closed_pipe();
     cli::main(levels)
+}
+
+/// Exit quietly when stdout is closed early (`cargo ccc ... | head`), like standard command-line
+/// tools, instead of panicking with "failed printing to stdout: Broken pipe".
+fn quiet_on_closed_pipe() {
+    #[cfg(unix)]
+    {
+        unsafe extern "C" {
+            fn signal(signum: i32, handler: usize) -> usize;
+        }
+        const SIGPIPE: i32 = 13;
+        const SIG_DFL: usize = 0;
+        // SAFETY: restoring the default disposition of SIGPIPE at startup, before any threads run.
+        unsafe {
+            signal(SIGPIPE, SIG_DFL);
+        }
+    }
 }

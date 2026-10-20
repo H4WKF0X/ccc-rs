@@ -13,12 +13,15 @@ new-contest.sh -> download level -> cargo ccc ingest -> /solve N -> cargo ccc al
 
 ## Start a contest
 
+**Contest day: follow [docs/CONTEST-DAY.md](docs/CONTEST-DAY.md)** (setup 10 minutes before, the
+online route, and the manual fallback if the login fails).
+
 1. Log in to codingcontest.org in **Firefox** and start the contest (or a training run).
 2. Create the repo and play:
 
 ```bash
-./new-contest.sh ccc42                 # -> ../ccc-ccc42: copied, git-initialised, built, login checked
-cd ../ccc-ccc42 && claude              # then in Claude Code:
+./new-contest.sh ccc-school-2026       # -> ../ccc-school-2026: copied, git-initialised, built, login checked
+cd ../ccc-school-2026 && claude        # then in Claude Code:
 /level                                 # fetch, solve, `all`, submit (you approve each submit), next level, ...
 # Windows: ./new-contest.ps1 ccc42 [dest]
 ```
@@ -36,8 +39,8 @@ cargo ccc all 3                  # solve all real inputs once (in parallel), sav
 cargo ccc submit 3               # re-validate, require current + checked outputs, confirm, upload
 ```
 
-Other commands: `progress`, `ingest <zip|dir|files> [--level N]`, `run N <in> [out]`, `bench N`,
-`new-level N [--from M]`, `status`, `guard N` (re-run the PDF check).
+Other commands: `progress`, `mode [online|manual]`, `ingest <zip|dir|files> [--level N]`, `run N <in> [out]`,
+`bench N`, `new-level N [--from M]`, `status`, `guard N` (re-run the PDF check).
 
 **For humans only:** `cargo ccc guard-html N` checks a level's sandbox HTML for text aimed at an AI
 (Claude reads its source; you only see it run). It prints what it finds and offers to quarantine the

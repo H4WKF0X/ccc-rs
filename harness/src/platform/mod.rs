@@ -1,10 +1,13 @@
-//! Getting levels from and outputs to the contest platform. Picked by `platform = "..."` in `ccc.toml`.
+//! Getting levels from and outputs to the contest platform. Two modes, per person
+//! (`cargo ccc mode online|manual`, stored in the git-ignored ccc.local.toml):
 //!
-//! - `codingcontest` (default): talks to codingcontest.org directly (`login`, `fetch`, `progress`, `submit`).
-//! - `manual`: you download/upload in the browser; `submit` lists what to upload.
+//! - **online** (default): talks to codingcontest.org directly (`login`, `fetch`, `progress`, `submit`);
+//!   the login is read from Firefox.
+//! - **manual**: the fallback when the login doesn't work. The human downloads each level's zip in
+//!   the browser (`fetch` waits for it in Downloads), and `submit` copies the outputs into Downloads
+//!   for upload.
 //!
-//! The harness has already re-validated the example and checked the outputs are fresh before
-//! calling `submit`.
+//! The harness has already re-validated the example and checked the outputs before `submit`.
 
 mod codingcontest;
 mod firefox;
@@ -12,44 +15,79 @@ mod manual;
 
 use std::path::PathBuf;
 
-use crate::config::Config;
+use crate::config::{self, Config};
 use crate::layout::Workspace;
 
-fn platform(cfg: &Config) -> Result<&str, String> {
-    match cfg.get("platform").unwrap_or("codingcontest") {
-        p @ ("manual" | "codingcontest") => Ok(p),
-        other => Err(format!("unknown platform {other:?} in ccc.toml (use \"manual\" or \"codingcontest\")")),
-    }
-}
-
-fn needs_client(cfg: &Config, what: &str) -> Result<(), String> {
-    match platform(cfg)? {
-        "codingcontest" => Ok(()),
-        _ => Err(format!("`{what}` talks to codingcontest.org: set platform = \"codingcontest\" in ccc.toml")),
-    }
-}
+const SWITCH_TO_MANUAL: &str = "cargo ccc mode manual";
 
 pub fn submit(ws: &Workspace, cfg: &Config, level: u32, outputs: &[PathBuf], yes: bool) -> Result<bool, String> {
-    match platform(cfg)? {
-        "codingcontest" => codingcontest::submit(cfg, level, outputs, yes),
-        _ => manual::submit(ws, level, outputs),
+    match cfg.mode() {
+        "manual" => manual::submit(ws, cfg, level, outputs),
+        _ => codingcontest::submit(cfg, level, outputs, yes),
     }
 }
 
-/// Download level `level`'s zip and ingest it.
+/// Get level `level`'s zip (online: download it; manual: wait for it in Downloads) and ingest it.
 pub fn fetch(ws: &Workspace, cfg: &Config, level: u32) -> Result<bool, String> {
-    needs_client(cfg, "fetch")?;
-    codingcontest::fetch(ws, cfg, level)
+    match cfg.mode() {
+        "manual" => manual::fetch(ws, cfg, level),
+        _ => codingcontest::fetch(ws, cfg, level).map_err(|e| {
+            format!("{e}\n  If the login doesn't work, switch to manual mode: {SWITCH_TO_MANUAL}")
+        }),
+    }
 }
 
-/// Check the login and show who you are, which contest was found, and your progress.
+/// Check the login, with an unmistakable LOGIN OK / LOGIN FAILED result.
 pub fn login(cfg: &Config) -> Result<bool, String> {
-    needs_client(cfg, "login")?;
-    codingcontest::login(cfg)
+    match cfg.mode() {
+        "manual" => {
+            println!("MANUAL MODE: no login is used. Download each level's zip into Downloads; outputs are copied");
+            println!("there for upload. To go back to online mode: cargo ccc mode online");
+            Ok(true)
+        }
+        _ => codingcontest::login(cfg, SWITCH_TO_MANUAL),
+    }
 }
 
-/// Show the team's progress as the platform sees it (also a cheap check that auth works).
+/// Show the team's progress as the platform sees it.
 pub fn progress(cfg: &Config) -> Result<bool, String> {
-    needs_client(cfg, "progress")?;
-    codingcontest::progress(cfg)
+    match cfg.mode() {
+        "manual" => {
+            println!("Manual mode: progress is only visible in the browser. `cargo ccc status` shows the next level.");
+            Ok(true)
+        }
+        _ => codingcontest::progress(cfg),
+    }
+}
+
+/// `cargo ccc mode [online|manual]`: show or switch the mode (for this person, in ccc.local.toml).
+pub fn mode(ws: &Workspace, cfg: &Config, wanted: Option<&str>) -> Result<bool, String> {
+    let Some(wanted) = wanted else {
+        println!("Mode: {}", cfg.mode());
+        return Ok(true);
+    };
+    let platform = match wanted {
+        "manual" => "manual",
+        "online" | "codingcontest" => "codingcontest",
+        other => return Err(format!("unknown mode {other:?}: use `online` or `manual`")),
+    };
+    config::set_local(&ws.root, "platform", platform)?;
+    match platform {
+        "manual" => {
+            let downloads = cfg.downloads_dir()?;
+            println!("MANUAL MODE is on (for you, in ccc.local.toml). From now on:");
+            println!("  - download each level's zip in the browser into {}", downloads.display());
+            println!("    (`fetch N` and /level wait for it and continue by themselves)");
+            println!("  - after each level, the outputs to upload are copied into {}", downloads.display());
+            println!("  - upload them in the game; if one is WRONG, tell Claude the message");
+            println!("Back to online mode: cargo ccc mode online");
+        }
+        _ => println!("ONLINE MODE is on. Check it with: cargo ccc login"),
+    }
+    Ok(true)
+}
+
+/// Manual mode only: the level after the last one handed over for upload (1 if none).
+pub fn next_manual_level(ws: &Workspace) -> u32 {
+    ws.ingested_levels().into_iter().filter(|&n| manual::handed_over(ws, n).exists()).max().map_or(1, |n| n + 1)
 }

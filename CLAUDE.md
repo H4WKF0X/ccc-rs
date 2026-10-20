@@ -14,7 +14,13 @@ human approves each submit. The contest is timed, so keep moving.
 
 ## The loop
 
-1. `cargo ccc fetch <N>` (or a browser download plus `cargo ccc ingest`) fills `work/level<N>/`:
+There are two **modes**, shown by `cargo ccc status`. In **online** mode (the default) the harness
+talks to codingcontest.org itself. **Manual** mode is the fallback when the login fails: the human
+downloads each level's zip into Downloads (`fetch` waits for it, so run fetch with the Bash tool's
+maximum timeout), and `submit` copies the outputs into Downloads for the human to upload. In
+manual mode you don't see the verdict: the next zip arriving means the level passed.
+
+1. `cargo ccc fetch <N>` fills `work/level<N>/`:
    - `in/in_level-<N>_0-example.txt` + `in/out_level-<N>_0-example.txt`: the worked example (known answer)
    - `in/in_level-<N>_1-small.txt`, `in/in_level-<N>_2-large.txt`: the real inputs (answers unknown)
    - `statement/level-<N>.pdf`: the problem description. Read this first.

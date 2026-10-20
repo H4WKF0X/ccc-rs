@@ -89,26 +89,11 @@ fn list(dir: &Path) -> Vec<PathBuf> {
     v
 }
 
-/// The newest `*.zip` in the Downloads folder whose name mentions "level" or "ccc".
+/// The newest complete level zip in Downloads that isn't older than this contest repo.
 fn newest_download(cfg: &Config) -> Result<PathBuf, String> {
-    let dir = match cfg.get("downloads_dir") {
-        Some(d) => PathBuf::from(d),
-        None => std::env::var_os("HOME")
-            .or_else(|| std::env::var_os("USERPROFILE"))
-            .map(|home| PathBuf::from(home).join("Downloads"))
-            .ok_or("no HOME directory; pass the zip path explicitly")?,
-    };
-    fs::read_dir(&dir)
-        .map_err(|e| format!("could not read {}: {e}", dir.display()))?
-        .filter_map(|e| e.ok())
-        .filter(|e| {
-            let name = e.file_name().to_string_lossy().to_lowercase();
-            name.ends_with(".zip") && (name.contains("level") || name.contains("ccc"))
-        })
-        .filter_map(|e| Some((e.metadata().ok()?.modified().ok()?, e.path())))
-        .max()
-        .map(|(_, path)| path)
-        .ok_or_else(|| format!("no level zip in {}; pass one: cargo ccc ingest <zip>", dir.display()))
+    crate::downloads::level_zips(cfg)?.into_iter().next().ok_or_else(|| {
+        format!("no (new) level zip in {}; pass one: cargo ccc ingest <zip>", cfg.downloads_dir().unwrap_or_default().display())
+    })
 }
 
 fn collect(path: &Path, out: &mut Vec<File>) -> Result<(), String> {

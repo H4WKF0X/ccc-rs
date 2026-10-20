@@ -18,7 +18,8 @@ done
 case "$name" in *[!A-Za-z0-9._-]*) echo "name may only contain letters, digits, '.', '_' and '-'" >&2; exit 2 ;; esac
 
 src="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-dest="${dest:-$(dirname "$src")/ccc-$name}"
+case "$name" in ccc-*) folder="$name" ;; *) folder="ccc-$name" ;; esac
+dest="${dest:-$(dirname "$src")/$folder}"
 if [ -e "$dest" ] && [ -n "$(ls -A "$dest" 2>/dev/null)" ]; then echo "$dest already exists and is not empty" >&2; exit 1; fi
 mkdir -p "$dest"
 dest="$(cd "$dest" && pwd)"
@@ -30,7 +31,8 @@ rm -f "$dest/new-contest.sh" "$dest/new-contest.ps1"
 
 # Fill in ccc.toml (portable: no `sed -i`).
 tmp="$(mktemp)"
-sed -e "s/^name = .*/name = \"$name\"/" -e "s/^game_slug = .*/game_slug = \"$game\"/" "$dest/ccc.toml" > "$tmp"
+sed -e "s/^name = .*/name = \"$name\"/" -e "s/^game_slug = .*/game_slug = \"$game\"/" \
+    -e "s/^created = .*/created = \"$(date +%s)\"/" "$dest/ccc.toml" > "$tmp"
 mv "$tmp" "$dest/ccc.toml"
 # Unique package and binary names: contest repos share one build directory (see .cargo/config.toml).
 id="$(printf %s "$name" | tr . -)"
@@ -44,21 +46,19 @@ cd "$dest"
 git init -q -b main
 git add -A
 git commit -q -m "contest $name (from ccc-rs template)"
+# Build everything now (release + tests), so nothing compiles at contest time.
 cargo build --release -q
+cargo test --no-run -q 2>/dev/null
 
-echo "Created contest repo: $dest"
+echo "Created contest repo: $dest (built, nothing left to compile)"
 echo
-echo "Checking the codingcontest.org login and contest:"
-if cargo ccc login; then
-  ready="Ready."
-else
-  ready="Not ready yet: fix the login/contest issue above (log in to codingcontest.org in Firefox, start the
-contest or training there), then run \`cargo ccc login\` again."
-fi
+cargo ccc login || true
 
 cat <<MSG
 
-$ready Next:
-  cd "$dest" && claude          # start Claude Code in the contest repo
-  /level                        # plays from the current level: fetch, solve, all, submit (you approve), next
+When the contest starts (runbook: docs/CONTEST-DAY.md):
+  1. Open the game in the browser (Firefox, logged in to codingcontest.org).
+  2. cd "$dest" && cargo ccc login     -> must say LOGIN OK
+  3. claude, then /level                -> fetch, check, solve, submit (you approve), next level ...
+  LOGIN FAILED? cargo ccc mode manual   -> zips and uploads go through ~/Downloads; then claude + /level
 MSG

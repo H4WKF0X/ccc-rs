@@ -84,10 +84,18 @@ impl Clock {
 
 impl Game {
     fn connect(cfg: &Config) -> Result<Game, String> {
+        Game::connect_staged(cfg).map_err(|e| match e {
+            Connect::Login(why) => why,
+            Connect::NoContest { why, .. } => why,
+        })
+    }
+
+    /// Like `connect`, but tells "the login failed" apart from "logged in, but no contest".
+    fn connect_staged(cfg: &Config) -> Result<Game, Connect> {
         let agent = agent();
         if let Some(token) = cfg.get("game_token") {
-            let base = cfg.get("game_url").ok_or("game_token is set, so game_url must be too")?;
-            let slug = cfg.get("contest_slug").ok_or("game_token is set, so contest_slug must be too")?;
+            let base = cfg.get("game_url").ok_or(Connect::Login("game_token is set, so game_url must be too".into()))?;
+            let slug = cfg.get("contest_slug").ok_or(Connect::Login("game_token is set, so contest_slug must be too".into()))?;
             return Ok(Game {
                 agent,
                 base: base.trim_end_matches('/').into(),
@@ -103,19 +111,29 @@ impl Game {
             Some(cookie) => (cookie.to_owned(), "cookie from config".to_owned()),
             None => {
                 let (cookie, profile) = firefox::cookie_header("codingcontest.org", "SESSION")
-                    .map_err(|e| format!("not logged in: {e}.\n{LOGIN_HELP}"))?;
+                    .map_err(|e| Connect::Login(format!("not logged in: {e}.\n{LOGIN_HELP}")))?;
                 (cookie, format!("Firefox profile {profile}"))
             }
         };
         let portal = Portal { agent: &agent, cookie: &cookie };
-        let username = portal.get_json("/api/auth/current-user").ok().and_then(|u| u["username"].as_str().map(str::to_owned));
-        if username.is_none() {
-            return Err(format!("codingcontest.org did not accept the login ({auth}); it has probably expired.\n{LOGIN_HELP}"));
-        }
-        let contest = portal.find_contest(cfg.get("contest"))?;
-        let slug = str_field(&contest, "slug")?;
-        let base = str_field(&contest, "gameBaseUrl")?.trim_end_matches('/').to_owned();
-        let token = str_field(&portal.post_json("/api/game-token", &serde_json::json!({ "contestSlug": slug }))?, "token")?;
+        let user = match portal.get_json("/api/auth/current-user") {
+            Ok(u) => u["username"].as_str().map(str::to_owned),
+            Err(e) => return Err(Connect::Login(format!("could not reach codingcontest.org ({auth}): {e}"))),
+        };
+        let Some(user) = user else {
+            return Err(Connect::Login(format!(
+                "codingcontest.org did not accept the login ({auth}); it has probably expired.\n{LOGIN_HELP}"
+            )));
+        };
+        let no_contest = |why: String| Connect::NoContest { user: user.clone(), why };
+        let contest = portal.find_contest(cfg.get("contest")).map_err(no_contest)?;
+        let slug = str_field(&contest, "slug").map_err(no_contest)?;
+        let base = str_field(&contest, "gameBaseUrl").map_err(no_contest)?.trim_end_matches('/').to_owned();
+        let token = portal
+            .post_json("/api/game-token", &serde_json::json!({ "contestSlug": slug }))
+            .and_then(|t| str_field(&t, "token"))
+            .map_err(no_contest)?;
+        let username = Some(user);
         Ok(Game {
             agent,
             base,
@@ -190,6 +208,12 @@ impl Game {
         }
         json_body(resp, &self.request("POST", &path))
     }
+}
+
+/// Why `connect` failed: the login itself, or (logged in, but) finding/opening the contest.
+enum Connect {
+    Login(String),
+    NoContest { user: String, why: String },
 }
 
 /// The portal, authenticated with the browser's cookies.
@@ -289,10 +313,37 @@ impl Portal<'_> {
 
 // ----------------------------------------------------------------------------- commands
 
-pub fn login(cfg: &Config) -> Result<bool, String> {
-    let game = Game::connect(cfg)?;
-    println!("Logged in as {} ({})", game.username.as_deref().unwrap_or("?"), game.auth);
-    print_progress(&game)
+/// `cargo ccc login`: an unmistakable LOGIN OK / LOGIN FAILED, and what to do next.
+pub fn login(cfg: &Config, switch_to_manual: &str) -> Result<bool, String> {
+    let rule = "=".repeat(78);
+    match Game::connect_staged(cfg) {
+        Ok(game) => {
+            let level = game.progress().ok().as_ref().and_then(current_level);
+            let total = game.levels().map_or(String::new(), |t| format!(" of {t}"));
+            let left = game.clock.as_ref().map_or(String::new(), |c| format!(", {}", c.describe()));
+            println!("{rule}");
+            println!("LOGIN OK: {} @ {} (login from {})", game.username.as_deref().unwrap_or("?"), game.slug, game.auth);
+            println!("  game {}, level {}{total} unlocked{left}", game.base, level.map_or("?".into(), |l| l.to_string()));
+            println!("  Next: start `claude` in this folder and type /level");
+            println!("{rule}");
+            Ok(true)
+        }
+        Err(Connect::NoContest { user, why }) => {
+            println!("{rule}");
+            println!("LOGGED IN as {user}, but NO CONTEST FOUND: {why}");
+            println!("  Before the start that's expected. Once it starts: open the game in the browser, then run");
+            println!("  `cargo ccc login` again. If it keeps failing: {switch_to_manual}");
+            println!("{rule}");
+            Ok(false)
+        }
+        Err(Connect::Login(why)) => {
+            println!("{rule}");
+            println!("LOGIN FAILED: {why}");
+            println!("  Switch to manual mode (browser downloads/uploads via ~/Downloads): {switch_to_manual}");
+            println!("{rule}");
+            Ok(false)
+        }
+    }
 }
 
 pub fn progress(cfg: &Config) -> Result<bool, String> {

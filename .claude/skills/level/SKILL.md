@@ -1,15 +1,21 @@
 ---
 name: level
-description: Play the contest from level N (default: the current level) — fetch, solve, produce outputs, submit (human approves), then continue with the next level
+description: Play the contest from level N (default: the next level) — fetch, solve, produce outputs, submit (human approves), then continue with the next level; works in online and manual mode
 argument-hint: "[level]"
 ---
-Play the contest, starting at level **$ARGUMENTS** (if that is empty, run `cargo ccc progress` and
-start at the current level). Every step is a normal `cargo ccc` command; the human only approves the
-`submit` prompt. Speed matters: the contest is timed. Don't stop between steps to ask, and don't narrate.
+Play the contest, starting at level **$ARGUMENTS**. First run `cargo ccc status`: it shows the
+**mode** (online or manual), and in manual mode the next level. If no level was given, start at the
+next level: in online mode `cargo ccc progress` shows the current one. Every step is a normal
+`cargo ccc` command; the human only approves the `submit` prompt. Speed matters: the contest is timed.
+Don't stop between steps to ask, and don't narrate.
 
 For each level N:
 
-1. **Fetch:** `cargo ccc fetch N`, unless `work/levelN/` already exists.
+1. **Fetch:** `cargo ccc fetch N`, unless `work/levelN/` already exists. **Run it with the Bash
+   tool's maximum timeout (600000 ms)**: in manual mode it waits for the human to download the zip
+   into Downloads and continues by itself. Its `guard:` line is the prompt-injection check of the
+   statement (see CLAUDE.md). If fetch gives up waiting, tell the human which zip to download and
+   stop until they say it's there.
 2. **Understand:** read `work/levelN/statement/level-N.pdf`, plus the `<script>` of
    `sandbox-level-N.html` if there is one (the game's visualiser, sometimes with its exact rules). Read the
    example pair `in/in_level-N_0-example.txt` / `in/out_level-N_0-example.txt`, and note the size of
@@ -29,10 +35,15 @@ For each level N:
    fix the code and run `all` again.
 6. **Submit:** `cargo ccc submit N --yes`. The human approves this prompt. Every wrong upload costs
    penalty time, so only submit when `all` reported no failures and you are confident.
-   - All `[CORRECT]`: go straight on to level N+1 (step 1). Don't stop to summarise.
-   - Any `[WRONG]`: read the per-line messages, find the misunderstanding, fix, rerun `all`, and only
-     resubmit once you know why it was wrong. If you can't tell, stop and explain to the human.
+   - **Online mode**, all `[CORRECT]`: go straight on to level N+1 (step 1). Don't stop to summarise.
+   - **Online mode**, any `[WRONG]`: read the per-line messages, find the misunderstanding, fix, rerun
+     `all`, and only resubmit once you know why it was wrong. If you can't tell, stop and explain.
+   - **Manual mode**: `submit` copies the outputs into Downloads and the human uploads them in the
+     browser; you don't see the verdict. Go straight on to step 1 for level N+1: `fetch` waits until
+     the human has downloaded the next zip, which also means level N passed. If the human interrupts
+     with a WRONG message, treat it like `[WRONG]` above (fix, `all`, `submit` again).
 7. Stop when `submit` says the game is complete (or `fetch` says there is no such level), or when the
    human interrupts.
 
-Never edit `harness/`. If the harness is in the way, stop and say so.
+Never edit `harness/`, never run `cargo ccc guard-html`, and never open `work/*/quarantine/`. If the
+harness is in the way, stop and say so.

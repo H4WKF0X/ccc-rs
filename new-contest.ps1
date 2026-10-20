@@ -10,7 +10,8 @@ $ErrorActionPreference = 'Stop'
 if ($Name -notmatch '^[A-Za-z0-9._-]+$') { throw "name may only contain letters, digits, '.', '_' and '-'" }
 
 $src = $PSScriptRoot
-if (-not $Dest) { $Dest = Join-Path (Split-Path $src -Parent) "ccc-$Name" }
+$folder = if ($Name.StartsWith('ccc-')) { $Name } else { "ccc-$Name" }
+if (-not $Dest) { $Dest = Join-Path (Split-Path $src -Parent) $folder }
 if ((Test-Path $Dest) -and (Get-ChildItem -Force $Dest | Select-Object -First 1)) { throw "$Dest already exists and is not empty" }
 New-Item -ItemType Directory -Force -Path $Dest | Out-Null
 $Dest = (Resolve-Path $Dest).Path
@@ -28,7 +29,8 @@ foreach ($rel in $files) {
 $toml = Join-Path $Dest 'ccc.toml'
 (Get-Content $toml) `
     -replace '^name = .*', "name = `"$Name`"" `
-    -replace '^game_slug = .*', "game_slug = `"$Game`"" | Set-Content $toml
+    -replace '^game_slug = .*', "game_slug = `"$Game`"" `
+    -replace '^created = .*', "created = `"$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())`"" | Set-Content $toml
 # Unique package and binary names: contest repos share one build directory (see .cargo/config.toml).
 $id = $Name -replace '\.', '-'
 foreach ($f in @('harness/Cargo.toml', 'solution/Cargo.toml')) {
@@ -42,18 +44,19 @@ try {
     git init -q -b main
     git add -A
     git commit -q -m "contest $Name (from ccc-rs template)"
+    # Build everything now (release + tests), so nothing compiles at contest time.
     cargo build --release -q
     if ($LASTEXITCODE -ne 0) { throw "cargo build failed" }
-    Write-Host "Created contest repo: $Dest`n`nChecking the codingcontest.org login and contest:"
+    cargo test --no-run -q 2>$null
+    Write-Host "Created contest repo: $Dest (built, nothing left to compile)`n"
     cargo ccc login
-    $ready = if ($LASTEXITCODE -eq 0) { "Ready." } else {
-        "Not ready yet: fix the login/contest issue above (log in to codingcontest.org in Firefox, start the contest or training there), then run ``cargo ccc login`` again."
-    }
 } finally { Pop-Location }
 
 Write-Host @"
 
-$ready Next:
-  cd "$Dest"; claude            # start Claude Code in the contest repo
-  /level                        # plays from the current level: fetch, solve, all, submit (you approve), next
+When the contest starts (runbook: docs/CONTEST-DAY.md):
+  1. Open the game in the browser (Firefox, logged in to codingcontest.org).
+  2. cd "$Dest"; cargo ccc login       -> must say LOGIN OK
+  3. claude, then /level                -> fetch, check, solve, submit (you approve), next level ...
+  LOGIN FAILED? cargo ccc mode manual   -> zips and uploads go through Downloads; then claude + /level
 "@

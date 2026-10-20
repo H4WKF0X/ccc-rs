@@ -1,12 +1,16 @@
 # Contest settings (committed). Machine-wide settings (e.g. credentials) go in ~/.config/ccc/config.toml,
 # personal overrides for this repo in ccc.local.toml (git-ignored). Later files win; empty values don't.
 
-# Set by new-contest.sh.
+# Set by new-contest.sh. `created` (Unix seconds) makes manual mode ignore zips in Downloads that
+# are older than this repo (they belong to an earlier contest or training run).
 name = "template"
 game_slug = ""
+created = ""
 
-# "codingcontest": login/fetch/progress/submit talk to codingcontest.org (login read from Firefox).
-# "manual": you download/upload in the browser and `submit` just lists the files.
+# "codingcontest" (online): login/fetch/progress/submit talk to codingcontest.org (login read from Firefox).
+# "manual": switch with `cargo ccc mode manual` (stored per person in ccc.local.toml) when the login
+# doesn't work. You download each level's zip into Downloads (`fetch` waits for it, up to `fetch_wait`
+# seconds, default 570), and `submit` copies the outputs into Downloads for upload.
 platform = "codingcontest"
 
 # The <name> in the portal URL codingcontest.org/contests/<name>/game. Usually unnecessary: without it
