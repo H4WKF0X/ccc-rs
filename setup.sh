@@ -31,12 +31,11 @@ main() {
   fi
 
   echo "Downloading the template ($template@$ref)..."
-  local tmp
-  tmp="$(mktemp -d)"
-  trap 'rm -rf "$tmp"' EXIT
-  gh api "repos/$template/tarball/$ref" > "$tmp/template.tar.gz" < /dev/null
+  CCC_SETUP_TMP="$(mktemp -d)"
+  trap 'rm -rf "${CCC_SETUP_TMP:-}"' EXIT
+  gh api "repos/$template/tarball/$ref" > "$CCC_SETUP_TMP/template.tar.gz" < /dev/null
   mkdir -p "$dest"
-  tar -xzf "$tmp/template.tar.gz" --strip-components=1 -C "$dest"
+  tar -xzf "$CCC_SETUP_TMP/template.tar.gz" --strip-components=1 -C "$dest"
   cd "$dest"
   bash tools/init-contest.sh "$name" < /dev/null
 }
