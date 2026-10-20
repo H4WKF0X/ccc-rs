@@ -6,17 +6,18 @@ fishy and help with the browser.
 ## 10 minutes before the start
 
 1. Firefox: log in to codingcontest.org. Leave the contest page open.
-2. Create the contest repo (about 10 s; everything is compiled, nothing compiles later):
+2. Create the contest repo (about 10 s if this machine has made one before, else 1-2 min, so do a
+   test run the day before; everything is compiled, nothing compiles later):
 
    ```bash
-   cd ~/projects/ccc-rs && ./new-contest.sh ccc-school-2026
+   gh api repos/H4WKF0X/ccc-rs/contents/setup.sh -H 'Accept: application/vnd.github.raw' | bash -s -- ccc-school-2026
    ```
 
    It ends with a login check, which before the start should say
    **ACCOUNT OK … CONTEST NOT RUNNING: <your contest> … starts … (in N min)**. That confirms your
    login and your registration. **ACCOUNT LOGIN FAILED**: log in to codingcontest.org in Firefox
    again, then `cargo ccc login`.
-3. `cd ../ccc-school-2026` and start `claude`, so the session is ready. Don't type `/level` yet.
+3. `cd ~/projects/ccc-school-2026` and start `claude`, so the session is ready. Don't type `/level` yet.
 
 ## At the start
 

@@ -1,7 +1,7 @@
 # CCC contest repo — project memory for Claude Code
 
 > In the `ccc-rs` template itself, this file describes the contest repos it creates. Template
-> work means changing `harness/`, `templates/`, `new-contest.*` or these docs.
+> work means changing `harness/`, `templates/`, `setup.sh`, `new-contest.sh`, `tools/` or these docs.
 
 This repo solves one **Cloudflight Coding Contest** game. A game is a series of levels of increasing
 difficulty; later levels reuse the input format and data model of earlier ones. The repo was

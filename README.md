@@ -5,29 +5,30 @@ coding agent (Claude Code). It knows nothing about any puzzle. You point it at a
 the agent writes the solver, and the pipeline validates against the worked example **before**
 anything is uploaded, because a wrong upload costs penalty minutes.
 
-This repo is a **template**. Each contest gets its own repo, made with `new-contest.sh`.
+This repo is a **template**. Each contest gets its own repo, made with `setup.sh` (any machine, no
+clone needed) or `new-contest.sh` (from a local clone).
 
 ```
-new-contest.sh -> download level -> cargo ccc ingest -> /solve N -> cargo ccc all N -> cargo ccc submit N
+setup.sh <name> -> cargo ccc login -> claude: /level  (fetch, guard, solve, all, submit, next level, ...)
 ```
 
 ## Start a contest
 
 **Contest day: follow [docs/CONTEST-DAY.md](docs/CONTEST-DAY.md)** (setup 10 minutes before, the
-online route, and the manual fallback if the login fails).
+online route, and the manual fallback).
 
-1. Log in to codingcontest.org in **Firefox** and start the contest (or a training run).
-2. Create the repo and play:
+On any machine (Linux/macOS; Windows: WSL), straight from this private repo, **without cloning it**.
+Needs `gh` logged in (`gh auth login`) with access to the repo:
 
 ```bash
-./new-contest.sh ccc-school-2026       # -> ../ccc-school-2026: copied, git-initialised, built, login checked
-cd ../ccc-school-2026 && claude        # then in Claude Code:
-/level                                 # fetch, solve, `all`, submit (you approve each submit), next level, ...
-# Windows: ./new-contest.ps1 ccc42 [dest]
+gh api repos/H4WKF0X/ccc-rs/contents/setup.sh -H 'Accept: application/vnd.github.raw' | bash -s -- ccc-school-2026
 ```
 
-All contest repos next to the template share one build directory (`../.ccc-target`): the first
-build on a machine compiles the dependencies once (~1 min), after that a new repo is ready in ~2 s.
+That checks the tools (with install hints), downloads a snapshot of the template into
+`~/projects/ccc-school-2026`, makes it the contest repo (git, build, login check), and prints the
+contest-day steps. Then: `cd ~/projects/ccc-school-2026 && claude`, and `/level`.
+
+Working on the template itself: `./new-contest.sh <name>` does the same from this local clone.
 
 `/level` drives everything with ordinary commands, which you can also run yourself:
 
