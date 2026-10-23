@@ -10,12 +10,14 @@
 //! ```ignore
 //! pub fn solve(input: &str) -> Vec<String>
 //! pub fn check(input: &str, output: &[String]) -> Result<(), String>   // optional
+//! pub fn score(input: &str, output: &[String]) -> Result<Vec<i64>, String> // optional: optimization levels
 //! ```
 //!
 //! `input` is the whole input file with line endings normalised to `\n` and no trailing newline.
 //! Return the output lines without line endings; the harness writes them with the line ending
 //! style of the example `.out` (see [`io::OutputStyle`]).
 
+pub mod best;
 pub mod cache;
 pub mod checker;
 pub mod config;
@@ -38,6 +40,10 @@ pub type SolveFn = fn(&str) -> Vec<String>;
 /// A level's own output checker: `Err` says why `output` is not a valid answer for `input`.
 pub type CheckFn = fn(&str, &[String]) -> Result<(), String>;
 
+/// An optimization level's scorer: the cost of each case (lower is better; negate a score where
+/// higher is better), or `Err` if `output` is invalid. See [`best`].
+pub type ScoreFn = fn(&str, &[String]) -> Result<Vec<i64>, String>;
+
 /// One registered level. The `solution` crate's build script generates the list of these from
 /// the files in `solution/src/levels/`, so adding a level means adding one file.
 #[derive(Clone, Copy)]
@@ -46,6 +52,8 @@ pub struct Level {
     pub solve: SolveFn,
     /// Set when the level file defines `pub fn check`.
     pub check: Option<CheckFn>,
+    /// Set when the level file defines `pub fn score` (an optimization level).
+    pub score: Option<ScoreFn>,
 }
 
 /// Entry point for the `solution` binary: `fn main() -> ExitCode { harness::main(LEVELS) }`.

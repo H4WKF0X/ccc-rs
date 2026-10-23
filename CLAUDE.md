@@ -113,6 +113,30 @@ Ten quick experiments ("is a diagonal step allowed?", "does the path have to end
 beat ten minutes of guessing. Once the rules are clear, encode them in `pub fn check` (below) so
 every output is checked. Candidate files go under `work/levelN/`, because that's what the oracle can read.
 
+## Optimization levels ("your score is …, lower/higher is better")
+
+There's no single right answer. Each file gets a score, and every point matters. At the school
+contest the loss came from spending an hour on small tweaks while big structural gains were left
+on the table. So:
+
+1. **Baseline first, fast:** a valid output, `pub fn check` (validity) and
+   `pub fn score(input: &str, output: &[String]) -> Result<Vec<i64>, String>`: the **cost per case,
+   lower is better** (negate a score where higher is better; `Err` if invalid). `all` then prints
+   the score per file. Submit right away: that secures the level.
+2. **Find where the big gains are before tuning anything.** Compute a **lower bound** per case
+   (a relaxation: LP, cheapest unit costs, ignoring an interaction) and work on the cases with the
+   largest gap between score and bound first. A case already near its bound isn't worth touching.
+3. **Prefer structural changes over parameter tweaks:** a different formulation or algorithm (exact
+   search for small cases, LP/flow/DP, reusing by-products, solving the inverse problem). **If three
+   changes in a row gain under 1%, stop tweaking and rethink the model.**
+4. **Every `all` keeps the best per case automatically** (`work/levelN/best/`, never worse), so
+   bold experiments are free. Run variants (seeds, strategies) and each `all` merges them in.
+   Teammates' or other sessions' outputs go into `work/levelN/candidates/` (any file names that
+   contain the file id, like `1-small`), then `cargo ccc best N` merges them per case.
+5. **Submit improvements regularly** (`cargo ccc submit N --yes` uploads only changed files) and
+   watch the clock: an optimization level absorbs unlimited time, and remaining levels may be
+   worth more. Never hard-code outputs into the source; `best/` keeps them.
+
 ## Reusing earlier levels (this matters a lot)
 
 Levels build on each other. When parsing or a data model recurs, move it into

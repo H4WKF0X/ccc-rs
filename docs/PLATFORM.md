@@ -70,6 +70,11 @@ let the game's checker decide, and real outputs get checked before upload too.
 Outputs are written as `out_level-1_1-small.txt` etc. The harness still understands CatCoder's
 `level1_1_small.in/.out` naming.
 
+**Optimization levels** (school 2026, level 3): `game-info` has `optimization: true` and
+`scoreDirection` per level; each file is scored and can be resubmitted to improve. The exact score
+field in the submit response isn't recorded yet. `submit` prints every extra response field next to
+`[CORRECT]`, so the first scored upload shows it.
+
 ## Still unknown
 
 - **The "0000" code** a Cloudflight person mentioned. It wasn't in the captured traffic.

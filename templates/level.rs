@@ -28,3 +28,11 @@ fn solve_one(t: &mut Tokens) -> String {
 // pub fn check(input: &str, output: &[String]) -> Result<(), String> {
 //     todo!("level {{N}}: validity rules")
 // }
+
+// Only for an optimization level (the statement gives a score): the cost of each case, lower is
+// better (negate a score where higher is better), Err if invalid. With it, `all` prints the score
+// per file and keeps the best answer per case across runs; `cargo ccc best N` merges other outputs.
+//
+// pub fn score(input: &str, output: &[String]) -> Result<Vec<i64>, String> {
+//     todo!("level {{N}}: cost per case")
+// }

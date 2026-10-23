@@ -6,13 +6,14 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Instant;
 
+use crate::best::{self, Scored};
 use crate::cache::{self, Record};
 use crate::checker::{self, Judges};
 use crate::config::Config;
 use crate::io::{self, OutputStyle};
 use crate::layout::{Workspace, file_name, is_example};
 use crate::validate::{self, Verdict};
-use crate::{Level, SolveFn, ingest, par, platform};
+use crate::{Level, ScoreFn, SolveFn, ingest, par, platform};
 
 const HELP: &str = "\
 cargo ccc — Cloudflight Coding Contest pipeline
@@ -29,6 +30,8 @@ cargo ccc — Cloudflight Coding Contest pipeline
                                  outputs already made by this exact build are reused
   run N <in> [out]               run level N on one file (prints to stdout without [out])
   bench N                        time level N on every input (also saves the real outputs)
+  best N [files/dirs..]          optimization levels: merge candidate outputs per case into the best
+                                 (also reads work/levelN/candidates/); `all` does this for every run
   new-level N [--from M]         create solution/src/levels/levelN.rs (from the stub, or a copy of level M)
   status                         what's ingested, solved and produced
   submit N [--yes]               re-validate, require current + checked outputs, then upload
@@ -75,6 +78,7 @@ fn dispatch(levels: &[Level], args: &[String]) -> Result<bool, String> {
         "all" => ctx.all(level_arg(rest)?),
         "run" => ctx.run(rest),
         "bench" => ctx.bench(level_arg(rest)?),
+        "best" => ctx.best(rest),
         "new-level" => ctx.new_level(rest),
         "status" => ctx.status(),
         "submit" => ctx.submit(level_arg(rest)?, rest.iter().any(|a| a == "--yes")),
@@ -89,6 +93,109 @@ struct Ctx<'a> {
 }
 
 impl Ctx<'_> {
+    fn scorer(&self, n: u32) -> Option<ScoreFn> {
+        self.levels.iter().find(|l| l.n == n).and_then(|l| l.score)
+    }
+
+    /// Merge a fresh output and/or extra candidates into `work/level<N>/best/` per case, and return
+    /// the best lines plus a one-line note. Invalid candidates are skipped (and named in the note).
+    fn keep_best(
+        &self,
+        n: u32,
+        score: ScoreFn,
+        input: &Path,
+        fresh: Option<Vec<String>>,
+        extra: Vec<(String, Vec<String>)>,
+    ) -> Result<(Vec<String>, String), String> {
+        let text = io::read_input(input)?;
+        let best_path = self.ws.level_dir(n).join("best").join(file_name(&self.ws.output_for(n, input)));
+        let previous = io::read_input(&best_path).ok().map(|t| io::lines(&t));
+        let mut candidates: Vec<Scored> = Vec::new();
+        let mut rejected = Vec::new();
+        let sources = previous
+            .map(|l| ("best so far".to_string(), l))
+            .into_iter()
+            .chain(fresh.map(|l| ("this run".to_string(), l)))
+            .chain(extra);
+        for (source, lines) in sources {
+            match best::evaluate(score, &text, lines, &source) {
+                Ok(scored) => candidates.push(scored),
+                Err(why) => rejected.push(format!("{source}: {why}")),
+            }
+        }
+        let before = candidates.iter().find(|c| c.source == "best so far").map(Scored::total);
+        let this_run = candidates.iter().find(|c| c.source == "this run").map(Scored::total);
+        let Some(merged) = best::merge(&candidates, |lines| best::evaluate(score, &text, lines, "merged").ok()) else {
+            return Err(format!("no valid output for {}: {}", file_name(input), rejected.join("; ")));
+        };
+        let total = merged.best.total();
+        io::write_lines(&best_path, &merged.best.lines, OutputStyle::LF)?;
+        let mut note = format!("score {total}");
+        let mut parts = Vec::new();
+        if let Some(t) = this_run {
+            parts.push(format!("this run {t}"));
+        }
+        if let Some(b) = before {
+            parts.push(if total < b { format!("was {b}, -{}", b - total) } else { format!("was {b}") });
+        }
+        let mixed = merged.picks.iter().collect::<std::collections::BTreeSet<_>>().len();
+        if mixed > 1 {
+            parts.push(format!("best per case from {mixed} sources"));
+        }
+        if !parts.is_empty() {
+            note.push_str(&format!(" ({})", parts.join(", ")));
+        }
+        if !rejected.is_empty() {
+            let first = rejected[0].rsplit('/').next().unwrap_or(&rejected[0]);
+            note.push_str(&format!("; {} invalid candidate(s) ignored (e.g. {})", rejected.len(), clip_note(first)));
+        }
+        Ok((merged.best.lines, note))
+    }
+
+    /// `cargo ccc best N [files/dirs...]`: merge candidate outputs (teammates', other sessions',
+    /// `work/levelN/candidates/`) per case into the best outputs, then check them.
+    fn best(&self, args: &[String]) -> Result<bool, String> {
+        let n = level_arg(args)?;
+        let score = self.scorer(n).ok_or_else(|| {
+            format!("level {n} has no `pub fn score` in level{n}.rs: it's needed to compare candidates")
+        })?;
+        let mut files = Vec::new();
+        let mut roots: Vec<PathBuf> = args.iter().skip(1).map(PathBuf::from).collect();
+        roots.push(self.ws.level_dir(n).join("candidates"));
+        for root in roots {
+            collect_files(&root, &mut files);
+        }
+        let style = self.style(n)?;
+        let judges = self.judges(n);
+        let mut ok = true;
+        for input in self.ws.real_inputs(n)? {
+            let id = crate::layout::file_id(&file_name(&input)).unwrap_or_else(|| file_name(&input));
+            let extra: Vec<(String, Vec<String>)> = files
+                .iter()
+                .filter(|f| is_candidate_file(f) && mentions_id(&file_name(f), &id))
+                .filter_map(|f| Some((f.display().to_string(), io::lines(&io::read_input(f).ok()?))))
+                .collect();
+            let out = self.ws.output_for(n, &input);
+            let current = io::read_input(&out).ok().map(|t| io::lines(&t));
+            let found = extra.len();
+            let (lines, note) = self.keep_best(n, score, &input, current, extra)?;
+            io::write_lines(&out, &lines, style)?;
+            let mut record = Record::new(&input, &out).ok_or("could not hash the output")?;
+            let verdict = match &judges {
+                Some(j) => {
+                    record.checker = verdict_text(j.judge(&self.ws.root, &input, &out));
+                    ok &= !record.checker.starts_with("rejected");
+                    format!("   checker {}", describe_verdict(&record.checker, false))
+                }
+                None => String::new(),
+            };
+            cache::save(&out, &record)?;
+            println!("  {:<28} {found} candidate(s), {note}{verdict}", file_name(&out));
+        }
+        println!("Next: `cargo ccc submit {n}` (only files whose score changed since the last upload are sent)");
+        Ok(ok)
+    }
+
     fn solver(&self, n: u32) -> Result<SolveFn, String> {
         self.levels.iter().find(|l| l.n == n).map(|l| l.solve).ok_or_else(|| {
             format!("no solver for level {n} yet; create solution/src/levels/level{n}.rs (`cargo ccc new-level {n}`)")
@@ -237,13 +344,21 @@ impl Ctx<'_> {
                     notes.push("reused (same build, same input)".into());
                 }
                 (None, Some(Ok((lines, secs)))) => {
+                    // Optimization level: never get worse; merge per case with the best so far.
+                    let (lines, score_note) = match self.scorer(n) {
+                        Some(score) => {
+                            let (merged, note) = self.keep_best(n, score, input, Some(lines), Vec::new())?;
+                            (merged, format!("   {note}"))
+                        }
+                        None => (lines, String::new()),
+                    };
                     io::write_lines(out, &lines, style)?;
                     let record = Record::new(input, out);
                     if let Some(r) = &record {
                         cache::save(out, r)?;
                     }
                     records.push(record);
-                    notes.push(format!("{} lines, solved in {secs:.1} s", lines.len()));
+                    notes.push(format!("{} lines, solved in {secs:.1} s{score_note}", lines.len()));
                 }
                 (None, Some(Err(e))) => {
                     records.push(None);
@@ -428,12 +543,72 @@ impl Ctx<'_> {
             println!("No real inputs for level {n}, so there is nothing to submit.");
             return Ok(false);
         }
-        platform::submit(&self.ws, &self.cfg, n, &outputs, yes)
+        // Optimization levels: only upload what changed since the last (online) upload.
+        let track = self.scorer(n).is_some() && self.cfg.mode() == "online";
+        let uploaded = |out: &Path| self.ws.level_dir(n).join(".uploaded").join(file_name(out));
+        if track {
+            let (same, changed): (Vec<PathBuf>, Vec<PathBuf>) = outputs
+                .into_iter()
+                .partition(|o| fs::read_to_string(uploaded(o)).ok() == cache::hash_file(o));
+            for o in &same {
+                println!("  {} unchanged since the last upload: not sent again", file_name(o));
+            }
+            if changed.is_empty() {
+                println!("Nothing changed since the last upload of level {n}.");
+                return Ok(true);
+            }
+            outputs = changed;
+        }
+        let result = platform::submit(&self.ws, &self.cfg, n, &outputs, yes)?;
+        if track {
+            for o in &outputs {
+                if let Some(hash) = cache::hash_file(o) {
+                    let marker = uploaded(o);
+                    let _ = fs::create_dir_all(marker.parent().unwrap());
+                    let _ = fs::write(marker, hash);
+                }
+            }
+        }
+        Ok(result)
     }
 }
 
 /// Output lines and seconds taken, or why solving failed.
 type Solved = Result<(Vec<String>, f64), String>;
+
+/// Every file under `root` (recursively); nothing if it doesn't exist.
+fn collect_files(root: &Path, out: &mut Vec<PathBuf>) {
+    if root.is_file() {
+        out.push(root.to_path_buf());
+    } else if let Ok(entries) = fs::read_dir(root) {
+        let mut paths: Vec<PathBuf> = entries.filter_map(|e| Some(e.ok()?.path())).collect();
+        paths.sort();
+        for p in paths {
+            collect_files(&p, out);
+        }
+    }
+}
+
+/// Could this be someone's output? Not inputs, harness records, logs or sources.
+fn is_candidate_file(path: &Path) -> bool {
+    let name = file_name(path).to_lowercase();
+    let skip_dir = path.components().any(|c| matches!(c.as_os_str().to_str(), Some(".records" | ".git" | "target" | "in")));
+    let skip_ext = [".log", ".rs", ".py", ".js", ".sh", ".md", ".toml", ".json", ".pdf", ".html", ".zip"].iter().any(|e| name.ends_with(e));
+    !skip_dir && !skip_ext && !name.starts_with("in_") && !name.contains("example")
+}
+
+fn clip_note(s: &str) -> String {
+    match s.char_indices().nth(100) {
+        Some((cut, _)) => format!("{}…", &s[..cut]),
+        None => s.to_owned(),
+    }
+}
+
+/// Does a candidate's file name refer to input file `id` (`1-small`)? `x_1-small.txt`, `1-small.out`
+/// yes; `11-small.txt` no.
+fn mentions_id(name: &str, id: &str) -> bool {
+    name.match_indices(id).any(|(i, _)| !name[..i].ends_with(|c: char| c.is_ascii_digit()))
+}
 
 /// How a checker verdict is stored in a record.
 fn verdict_text(verdict: checker::Verdict) -> String {

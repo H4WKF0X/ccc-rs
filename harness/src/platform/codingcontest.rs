@@ -314,7 +314,7 @@ impl Portal<'_> {
 
     fn find_contest(&self, configured: Option<&str>) -> Result<Value, String> {
         if let Some(name) = configured {
-            return self.get_json(&format!("/api/contests/{name}"));
+            return self.get_json(&format!("/api/contests/{}", path_segment(name)));
         }
         let regs = self.get_json("/api/contests/my-registrations")?;
         let running: Vec<&Value> = regs
@@ -355,13 +355,14 @@ impl Portal<'_> {
     /// Load the full contest record behind a registration or training summary. The portal routes
     /// by name or slug and the summaries name fields differently, so try what's there.
     fn load_contest(&self, summary: &Value) -> Result<Value, String> {
-        let candidates = [&summary["contestName"], &summary["contestSlug"], &summary["name"], &summary["slug"]]
+        // Slugs first: registration names contain spaces ("42nd SCHOOL CCC").
+        let candidates = [&summary["contestSlug"], &summary["slug"], &summary["contestName"], &summary["name"]]
             .into_iter()
-            .chain([&summary["contest"]["name"], &summary["contest"]["slug"]])
+            .chain([&summary["contest"]["slug"], &summary["contest"]["name"]])
             .filter_map(Value::as_str);
         let mut last_err = String::from("no contest name in the summary");
         for key in candidates {
-            match self.get_json(&format!("/api/contests/{key}")) {
+            match self.get_json(&format!("/api/contests/{}", path_segment(key))) {
                 Ok(c) if c["gameBaseUrl"].is_string() => return Ok(c),
                 Ok(_) => last_err = format!("/api/contests/{key} has no gameBaseUrl"),
                 Err(e) => last_err = e,
@@ -509,7 +510,7 @@ pub fn submit(cfg: &Config, level: u32, outputs: &[PathBuf], yes: bool) -> Resul
         let eval = &result["evaluation"];
         let correct = eval["isCorrect"].as_bool() == Some(true);
         all_correct &= correct;
-        println!("{} {id}", if correct { "[CORRECT]" } else { "[WRONG]  " });
+        println!("{} {id}{}", if correct { "[CORRECT]" } else { "[WRONG]  " }, extra_fields(&result));
         if !correct {
             let cases = eval["cases"].as_array().map_or(&[][..], Vec::as_slice);
             let wrong: Vec<&Value> = cases.iter().filter(|c| c["isCorrect"].as_bool() != Some(true)).collect();
@@ -573,7 +574,14 @@ fn with_retries<T>(mut call: impl FnMut() -> Result<T, ureq::Error>) -> Result<T
     let mut attempt = 0;
     loop {
         match call() {
-            Err(e) if attempt < 2 && !matches!(e, ureq::Error::StatusCode(_)) => {
+            // Only network trouble is worth a retry; a bad URL or HTTP status won't change.
+            Err(e)
+                if attempt < 2
+                    && matches!(
+                        e,
+                        ureq::Error::Io(_) | ureq::Error::Timeout(_) | ureq::Error::HostNotFound | ureq::Error::ConnectionFailed
+                    ) =>
+            {
                 attempt += 1;
                 eprintln!("  (network error: {e}; retrying)");
                 std::thread::sleep(Duration::from_millis(500 * attempt));
@@ -581,6 +589,38 @@ fn with_retries<T>(mut call: impl FnMut() -> Result<T, ureq::Error>) -> Result<T
             result => return result,
         }
     }
+}
+
+/// Everything in a submit response besides the verdict and the per-case list (e.g. the score of an
+/// optimization level), as `  score=26756 rank=12`. Field names aren't documented, so show them all.
+fn extra_fields(result: &Value) -> String {
+    let mut parts = Vec::new();
+    let mut add = |prefix: &str, obj: &Value| {
+        for (key, value) in obj.as_object().into_iter().flatten() {
+            if matches!(key.as_str(), "evaluation" | "cases" | "isCorrect") {
+                continue;
+            }
+            let shown = match value {
+                Value::String(s) => s.clone(),
+                Value::Array(_) | Value::Object(_) => clip(&value.to_string(), 80),
+                other => other.to_string(),
+            };
+            parts.push(format!("{prefix}{key}={shown}"));
+        }
+    };
+    add("", result);
+    add("", &result["evaluation"]);
+    if parts.is_empty() { String::new() } else { format!("  {}", parts.join(" ")) }
+}
+
+/// Percent-encode one URL path segment (anything but unreserved characters).
+fn path_segment(s: &str) -> String {
+    s.bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => (b as char).to_string(),
+            _ => format!("%{b:02X}"),
+        })
+        .collect()
 }
 
 fn json_body(resp: Result<ureq::http::Response<ureq::Body>, ureq::Error>, what: &str) -> Result<Value, String> {
@@ -666,6 +706,19 @@ fn clip(s: &str, max: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shows_extra_response_fields() {
+        let r = serde_json::json!({"evaluation": {"isCorrect": true, "score": 26756, "cases": []}});
+        assert_eq!(extra_fields(&r), "  score=26756");
+        assert_eq!(extra_fields(&serde_json::json!({"evaluation": {"isCorrect": true}})), "");
+    }
+
+    #[test]
+    fn encodes_path_segments() {
+        assert_eq!(path_segment("42nd SCHOOL CCC"), "42nd%20SCHOOL%20CCC");
+        assert_eq!(path_segment("training-ccc-2025.11-x"), "training-ccc-2025.11-x");
+    }
 
     #[test]
     fn describes_start_times() {

@@ -58,6 +58,14 @@ Notes:
 - If `fetch` gives up waiting (~9.5 min), Claude tells you which zip it needs. Download it and say "go".
 - `cargo ccc status` shows the mode and the next level.
 
+## Optimization levels
+
+If a level gives a score instead of one right answer: everyone can run their own ideas. Each `all`
+keeps the best answer per case automatically. To combine across laptops, copy your output files
+(names containing the file id, e.g. `out_level-3_1-small.txt`) into the driver's
+`work/level3/candidates/`, then run `cargo ccc best 3` there. It takes the best answer **per case**
+from all of them, checks the result, and `cargo ccc submit 3 --yes` uploads only what improved.
+
 ## Everyone else
 
 - **Watch each new zip** for anything fishy (statement PDF, sandbox HTML, inputs). For a level's
