@@ -36,6 +36,7 @@ cargo ccc — Cloudflight Coding Contest pipeline
   status                         what's ingested, solved and produced
   submit N [--yes]               re-validate, require current + checked outputs, then upload
 
+--budget S (all/run/bench): seconds per input file for searches that check harness::budget::expired().
 Set CCC_DEBUG=1 to see harness::trace! output on stderr, CCC_THREADS=k to limit harness::par.";
 
 pub fn main(levels: &[Level]) -> ExitCode {
@@ -59,6 +60,18 @@ fn dispatch(levels: &[Level], args: &[String]) -> Result<bool, String> {
         println!("{HELP}");
         return Ok(true);
     }
+    // --budget S: seconds per input file for searches that check harness::budget::expired().
+    let mut args: Vec<String> = args.to_vec();
+    if let Some(i) = args.iter().position(|a| a == "--budget") {
+        let secs: f64 = args.get(i + 1).and_then(|v| v.parse().ok()).ok_or("--budget needs a number of seconds")?;
+        crate::budget::set(std::time::Duration::from_secs_f64(secs));
+        args.drain(i..=i + 1);
+    }
+    let args = &args[..];
+    let Some(cmd) = args.first() else {
+        println!("{HELP}");
+        return Ok(false);
+    };
     let ws = Workspace::find()?;
     let cfg = Config::load(&ws.root)?;
     let ctx = Ctx { ws, cfg, levels };
@@ -244,7 +257,7 @@ impl Ctx<'_> {
             };
             checked += 1;
             let expected = read_bytes(&expected_path)?;
-            let produced = match solve_file(solve, &example.input) {
+            let produced = match solve_example(solve, &example.input) {
                 Ok(lines) => lines,
                 Err(e) => {
                     println!("NO-GO — {e}");
@@ -310,7 +323,9 @@ impl Ctx<'_> {
             .into_iter()
             .map(|input| {
                 let out = self.ws.output_for(n, &input);
-                let current = cache::current(&input, &out);
+                // An explicit --budget asks for a (longer or shorter) search: always run it. On an
+                // optimization level the per-case merge keeps the best, so nothing is lost.
+                let current = if crate::budget::per_file().is_some() { None } else { cache::current(&input, &out) };
                 (input, out, current)
             })
             .collect();
@@ -440,6 +455,7 @@ impl Ctx<'_> {
         for input in self.ws.inputs(n)? {
             let text = io::read_input(&input)?;
             par::set_label(&file_name(&input));
+            crate::budget::start();
             let start = Instant::now();
             let result = catch(|| solve(&text));
             let ms = start.elapsed().as_secs_f64() * 1000.0;
@@ -636,9 +652,17 @@ fn same_path(a: &Path, b: &Path) -> bool {
     }
 }
 
+/// Like [`solve_file`], for an example: only a short slice of any `--budget`.
+fn solve_example(solve: SolveFn, input: &Path) -> Result<Vec<String>, String> {
+    let text = io::read_input(input)?;
+    crate::budget::start_example();
+    catch(|| solve(&text)).map_err(|msg| format!("solver panicked on {}: {msg}", file_name(input)))
+}
+
 /// Read an input file and solve it; a panic in the solver becomes an error naming the file.
 fn solve_file(solve: SolveFn, input: &Path) -> Result<Vec<String>, String> {
     let text = io::read_input(input)?;
+    crate::budget::start();
     catch(|| solve(&text)).map_err(|msg| format!("solver panicked on {}: {msg}", file_name(input)))
 }
 

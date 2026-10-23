@@ -56,7 +56,7 @@ file. Claude is blocked from running it, because its output contains the untrust
 | `solution/src/model.rs` | Parsing/data model shared between levels. |
 | `templates/level.rs` | Stub for `cargo ccc new-level N`. |
 | `ccc.toml` / `ccc.local.toml` | Contest settings / personal overrides (git-ignored). |
-| `CLAUDE.md`, `.claude/skills/` | Project memory and `/solve`, `/review` for Claude Code. |
+| `CLAUDE.md`, `.claude/skills/` | Project memory; `/level` (the loop), `/optimize` (scored levels), `/solve`, `/review`. |
 | `docs/PLATFORM.md` | The codingcontest.org API, credentials setup, HAR capture guide. |
 | `checker/` | Judges many-valid-answer levels with the game's own sandbox script (on by default, self-tested). |
 | `tools/sanitize_har.py` | Strip secrets from a browser HAR before sharing it. |

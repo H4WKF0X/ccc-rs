@@ -32,6 +32,8 @@ fn solve_one(t: &mut Tokens) -> String {
 // Only for an optimization level (the statement gives a score): the cost of each case, lower is
 // better (negate a score where higher is better), Err if invalid. With it, `all` prints the score
 // per file and keeps the best answer per case across runs; `cargo ccc best N` merges other outputs.
+// Make searches anytime: `while !harness::budget::expired() { ... }`, then experiment cheaply with
+// `cargo ccc all N --budget 5` (see /optimize).
 //
 // pub fn score(input: &str, output: &[String]) -> Result<Vec<i64>, String> {
 //     todo!("level {{N}}: cost per case")

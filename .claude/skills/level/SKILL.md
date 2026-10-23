@@ -29,9 +29,9 @@ For each level N:
    `pub fn check` to the level file instead ("Levels with many valid answers" in CLAUDE.md), then
    expect "GO (checker)". Better still, write `check` first whenever the statement allows several
    answers.
-   **Optimization level** (the statement gives a score instead of one right answer)? Follow
-   "Optimization levels" in CLAUDE.md: `check` + `score` and a fast baseline submit first, then
-   lower bounds and structural improvements, not micro-tweaks.
+   **Optimization level** (the statement gives a score instead of one right answer)? Switch to the
+   `/optimize N` workflow (read `.claude/skills/optimize/SKILL.md` and follow it): a fast baseline
+   submit, then big structural ideas with cheap `--budget` experiments, not micro-tweaks.
 5. **Produce:** `cargo ccc all N`. This is the one real run: it solves every input once (in
    parallel), saves the outputs and runs the checker. Don't do separate timing or `bench` runs of
    the large input; `all` reports the time per file, and its outputs are reused later. If it fails,

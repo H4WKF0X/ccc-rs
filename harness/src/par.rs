@@ -48,9 +48,11 @@ pub fn map_threads<T: Sync, R: Send>(threads: usize, items: &[T], f: impl Fn(&T)
     let progress = Progress::new(n);
     let slots: Vec<Mutex<Option<R>>> = (0..n).map(|_| Mutex::new(None)).collect();
     let panic: Mutex<Option<Box<dyn Any + Send>>> = Mutex::new(None);
+    let deadline = crate::budget::deadline();
     std::thread::scope(|s| {
         for _ in 0..threads.clamp(1, n.max(1)) {
             s.spawn(|| {
+                crate::budget::inherit(deadline);
                 loop {
                     let i = next.fetch_add(1, Ordering::Relaxed);
                     if i >= n {

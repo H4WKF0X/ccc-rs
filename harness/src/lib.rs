@@ -18,6 +18,7 @@
 //! style of the example `.out` (see [`io::OutputStyle`]).
 
 pub mod best;
+pub mod budget;
 pub mod cache;
 pub mod checker;
 pub mod config;
