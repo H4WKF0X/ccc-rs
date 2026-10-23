@@ -17,6 +17,12 @@ school contest, an hour went into small tweaks while big improvements were misse
    algorithm, not variants of the current one) with a rough guess of how much each could gain and
    why. Pick the one with the largest expected gain and tell the human the plan in three lines.
    They may know better from the leaderboard or teammates.
+   **If the problem has linear costs and counts (buy/produce/assign/route), the first big idea is
+   an exact MILP model solved by a real solver**: HiGHS is ready (`~/.ccc-venv/bin/python`,
+   `import highspy`). Model ordering/time explicitly (e.g. phases or time-indexed inventory) if
+   things must exist before they are used. Never write your own branch-and-bound. Python outputs go
+   to `work/level$ARGUMENTS/candidates/`, then `cargo ccc best $ARGUMENTS` (validated with `check`
+   and `score`, merged per case).
 4. **Make every experiment cheap:** test an idea on the small file or a few cases with a short
    budget, `cargo ccc all $ARGUMENTS --budget 5`, and read the per-file score lines. Searches must be
    anytime (`while !harness::budget::expired() { ... }` keeps the best so far). Never wait minutes

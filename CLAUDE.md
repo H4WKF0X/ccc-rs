@@ -150,7 +150,13 @@ level N-1's code (`--from`) is often right.
   heavy searches use `harness::par::map_threads(k, ...)` with a small `k`.
 - **Deterministic.** No randomness, and never depend on `HashMap` iteration order; use
   `BTreeMap` or sort when order reaches the output.
-- Plain std Rust. No new crates without asking. Clear names over cleverness.
+- **Use real tools for heavy lifting; only the outputs are scored.** Add crates when they save
+  time. For optimization/search problems that fit a MILP/LP (counts, costs, capacities, orderings),
+  **use a real solver instead of writing your own branch-and-bound**: HiGHS is ready in Python at
+  `~/.ccc-venv/bin/python` (`import highspy`, plus numpy). Install more there if needed
+  (`~/.ccc-venv/bin/pip install ortools pulp scipy`). Write such scripts under `work/levelN/`, write
+  their outputs as files into `work/levelN/candidates/`, and `cargo ccc best N` checks and merges them.
+  Clear names over cleverness.
 - Unit tests for tricky helpers go in the level file (`#[cfg(test)] mod tests`); `cargo test` runs them.
 
 ## Commands

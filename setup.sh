@@ -36,8 +36,22 @@ main() {
   gh api "repos/$template/tarball/$ref" > "$CCC_SETUP_TMP/template.tar.gz" < /dev/null
   mkdir -p "$dest"
   tar -xzf "$CCC_SETUP_TMP/template.tar.gz" --strip-components=1 -C "$dest"
+  solver_env
   cd "$dest"
   bash tools/init-contest.sh "$name" < /dev/null
+}
+
+# Python with the HiGHS MILP solver in ~/.ccc-venv, for optimization levels (best effort: a
+# missing python3/venv only warns; nothing else depends on it).
+solver_env() {
+  local venv="$HOME/.ccc-venv"
+  if [ -x "$venv/bin/python" ] && "$venv/bin/python" -c "import highspy" 2>/dev/null; then return; fi
+  echo "Setting up the MILP solver (Python + HiGHS) in $venv..."
+  if python3 -m venv "$venv" < /dev/null && "$venv/bin/pip" install -q highspy numpy < /dev/null; then
+    echo "  ok: $venv/bin/python with highspy"
+  else
+    echo "warning: could not set up $venv (needs python3 with venv); optimization levels can still use Rust" >&2
+  fi
 }
 
 check_tools() {

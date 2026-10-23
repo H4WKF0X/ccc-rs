@@ -18,7 +18,11 @@
       "Bash(cargo check:*)",
       "Bash(cargo fmt:*)",
       "Bash(sh checker/node-safe.sh:*)",
-      "Bash(cargo ccc guard:*)"
+      "Bash(cargo ccc guard:*)",
+      "Bash(~/.ccc-venv/bin/python:*)",
+      "Bash(~/.ccc-venv/bin/python3:*)",
+      "Bash(~/.ccc-venv/bin/pip install:*)",
+      "Bash(cargo ccc best:*)"
     ],
     "ask": [
       "Bash(cargo ccc submit:*)"
