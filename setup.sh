@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Set up a contest repo on any machine (Linux/macOS) straight from the private template on GitHub,
-# without cloning the template. Needs `gh` logged in with access to the template repo.
+# Set up a contest repo on any machine (Linux/macOS) straight from the template on GitHub,
+# without cloning the template. Needs `gh` logged in.
 #
 #   gh api repos/H4WKF0X/ccc-rs/contents/setup.sh -H 'Accept: application/vnd.github.raw' | bash -s -- <name> [dest]
 #
@@ -75,7 +75,7 @@ check_tools() {
   }
   need git "version control" "$install git"
   need tar "unpacking the template" "$install tar"
-  need gh "downloading the private template" "$install $( [ "$os" = Darwin ] && echo gh || (command -v pacman >/dev/null && echo github-cli || echo gh) ), then: gh auth login"
+  need gh "downloading the template" "$install $( [ "$os" = Darwin ] && echo gh || (command -v pacman >/dev/null && echo github-cli || echo gh) ), then: gh auth login"
   need cargo "Rust" "https://rustup.rs (or: $install rustup), then: rustup default stable"
   need claude "Claude Code" "npm install -g @anthropic-ai/claude-code, then run claude once to log in"
   want node "the sandbox checker" "$install $( [ "$os" = Darwin ] && echo node || echo nodejs )"

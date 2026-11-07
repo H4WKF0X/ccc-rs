@@ -8,6 +8,8 @@ anything is uploaded, because a wrong upload costs penalty minutes.
 This repo is a **template**. Each contest gets its own repo, made with `setup.sh` (any machine, no
 clone needed) or `new-contest.sh` (from a local clone).
 
+The predecessor is ccc-pipeline, a first version of the pipeline in Java.
+
 ```
 setup.sh <name> -> cargo ccc login -> claude: /level  (fetch, guard, solve, all, submit, next level, ...)
 ```
@@ -17,8 +19,8 @@ setup.sh <name> -> cargo ccc login -> claude: /level  (fetch, guard, solve, all,
 **Contest day: follow [docs/CONTEST-DAY.md](docs/CONTEST-DAY.md)** (setup 10 minutes before, the
 online route, and the manual fallback).
 
-On any machine (Linux/macOS; Windows: WSL), straight from this private repo, **without cloning it**.
-Needs `gh` logged in (`gh auth login`) with access to the repo:
+On any machine (Linux/macOS; Windows: WSL), straight from this repo, **without cloning it**.
+Needs `gh` logged in (`gh auth login`):
 
 ```bash
 gh api repos/H4WKF0X/ccc-rs/contents/setup.sh -H 'Accept: application/vnd.github.raw' | bash -s -- ccc-school-2026
@@ -78,3 +80,7 @@ file. Claude is blocked from running it, because its output contains the untrust
 - One person drives the current level with Claude Code. The others ingest the next level, run
   `/review`, or build a quick visualiser. Commit each cleared level: `git commit -am "level 3"`.
 - **Agree who submits** each level so nobody double-uploads and eats penalties.
+
+## License
+
+MIT. See `LICENSE`.
